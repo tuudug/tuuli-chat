@@ -2,13 +2,13 @@ import React from "react";
 import ChatInterface from "@/components/ChatInterface";
 
 interface ChatPageProps {
-  params: { chatId: string }; // Expect resolved params
+  params: Promise<{ chatId: string }>; // Updated to match Next.js 15 requirement
 }
 
-// Revert to async as required by Next.js for accessing params
+// Added a comment to trigger file save and type regeneration
 export default async function ChatPage({ params }: ChatPageProps) {
-  // Params are automatically awaited in async Server Components
-  const { chatId } = params;
+  // Params need to be awaited in Next.js 15
+  const { chatId } = await params;
 
   return <ChatInterface chatId={chatId} />;
 }

@@ -9,8 +9,7 @@ import {
 } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";
-import { Message, MODEL_DETAILS, GeminiModelId } from "@/lib/types"; // Use our Message type, add GeminiModelId
-import { type CoreMessage } from "ai";
+import { Message, GeminiModelId } from "@/lib/types"; // Use our Message type, add GeminiModelId
 
 // Define categories and example questions
 const categories = {

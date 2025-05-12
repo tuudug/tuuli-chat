@@ -42,7 +42,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       setInitialMessagesError(null);
       return {
         initialMessages: [],
-        fetchedTitle: "New Conversation",
         fetchedModel: DEFAULT_MODEL_ID, // Use new default
       };
     }
@@ -75,7 +74,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         );
         return {
           initialMessages: [],
-          fetchedTitle,
           fetchedModel: DEFAULT_MODEL_ID, // Use new default
         };
       }
@@ -94,7 +92,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         fetchedModel = firstAssistantMessage.model_used as GeminiModelId;
       }
 
-      return { initialMessages: fetchedMessages, fetchedTitle, fetchedModel };
+      return { initialMessages: fetchedMessages, fetchedModel };
     } catch (error) {
       setInitialMessagesError(
         `Error loading chat data: ${
@@ -104,21 +102,19 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       setChatTitle("Error Loading Chat");
       return {
         initialMessages: [],
-        fetchedTitle: "Error",
         fetchedModel: DEFAULT_MODEL_ID, // Use new default
       };
     } finally {
       setInitialFetchLoading(false);
       setInitialMessagesFetched(true);
     }
-  }, [chatId]);
+  }, [chatId, supabase]);
 
   const {
     messages,
     input,
     handleInputChange,
     handleSubmit,
-    isLoading,
     error: _chatError, // UseChat error isn't displayed directly anymore
     setMessages,
     data,
@@ -173,13 +169,11 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       setInitialFetchLoading(false);
       setInitialMessagesError(null);
     } else if (chatId && !initialMessagesFetched) {
-      fetchInitialData().then(
-        ({ initialMessages, fetchedTitle, fetchedModel }) => {
-          // Ensure fetched messages also conform (they should already have created_at from DB)
-          setMessages(initialMessages as Message[]);
-          setSelectedModel(fetchedModel);
-        }
-      );
+      fetchInitialData().then(({ initialMessages, fetchedModel }) => {
+        // Ensure fetched messages also conform (they should already have created_at from DB)
+        setMessages(initialMessages as Message[]);
+        setSelectedModel(fetchedModel);
+      });
     }
   }, [chatId, initialMessagesFetched, fetchInitialData, setMessages]);
 

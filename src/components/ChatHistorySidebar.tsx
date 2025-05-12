@@ -7,20 +7,16 @@ import { useParams } from "next/navigation";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 // Removed RealtimeChannel, createClient imports as they are handled in layout
 // import * as Separator from "@radix-ui/react-separator"; // Separator removed
-import { PlusIcon, MessageSquareIcon, SearchIcon, XIcon } from "lucide-react"; // Added XIcon
+import { PlusIcon, MessageSquareIcon } from "lucide-react";
 import { Tables } from "@/types/supabase"; // Import generated types
 
 // Define props interface - Added chats and loading
 interface ChatHistorySidebarProps {
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   chats: Tables<"chats">[]; // Use full Tables type
   loading: boolean;
 }
 
 export default function ChatHistorySidebar({
-  isSidebarOpen,
-  setIsSidebarOpen,
   chats, // Destructure chats
   loading, // Destructure loading
 }: ChatHistorySidebarProps) {

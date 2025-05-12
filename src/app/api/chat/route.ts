@@ -2,7 +2,7 @@
 import { streamText, generateText, type CoreMessage, StreamData } from "ai"; // Add generateText
 import { createGoogleGenerativeAI } from "@ai-sdk/google"; // Use the provider-specific function
 import { createServer } from "@/lib/supabase/server"; // Correct function name
-import { cookies } from "next/headers"; // Keep cookies if needed elsewhere, though not used directly here
+import { cookies } from "next/headers"; // Keep cookies if needed elsewhere
 import { NextResponse } from "next/server";
 
 export const runtime = "edge"; // Required for Vercel AI SDK
@@ -194,7 +194,7 @@ export async function POST(req: Request) {
       const result = streamText({
         model: google(modelId),
         messages: [systemPrompt, ...messages], // Prepend system prompt
-        async onFinish({ text, toolCalls, toolResults, usage, finishReason }) {
+        async onFinish({ text, finishReason }) {
           // Ensure the stream finished successfully before saving
           if (finishReason === "stop" || finishReason === "length") {
             console.log(

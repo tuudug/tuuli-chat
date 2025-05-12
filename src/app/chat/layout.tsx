@@ -146,8 +146,6 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
             {/* Content container needs fixed width */}
             <div className="h-full overflow-y-auto w-72">
               <ChatHistorySidebar
-                setIsSidebarOpen={setIsSidebarOpen}
-                isSidebarOpen={isSidebarOpen}
                 chats={chats} // Pass chats
                 loading={loading} // Pass loading
               />
@@ -168,8 +166,6 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
       >
         <div className="h-full overflow-y-auto">
           <ChatHistorySidebar
-            setIsSidebarOpen={setIsSidebarOpen}
-            isSidebarOpen={isSidebarOpen}
             chats={chats} // Pass chats
             loading={loading} // Pass loading
           />
