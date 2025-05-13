@@ -83,7 +83,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   return (
-    <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full mb-8">
+    <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full mb-20">
       {" "}
       {/* Padding starts from sm breakpoint, Added mb-20 for mobile nav bar */}
       <form
