@@ -2,23 +2,22 @@
 
 "use client"; // Mark this component as a Client Component
 
-import React, { useEffect } from "react"; // Import useEffect
+import React from "react"; // Removed useEffect
 import Image from "next/image"; // Import Image
-import { useRouter } from "next/navigation"; // Import useRouter
+// Removed useRouter
 import { Slot } from "@radix-ui/react-slot"; // Import Slot
 import { createClient } from "@/lib/supabase/client"; // Use the client-side Supabase client
 
 export default function LoginPage() {
   const supabase = createClient();
-  const router = useRouter(); // Get router instance
+  // Removed router instance
 
   const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         // Optional: Specify a redirect URL after successful login
-        // redirectTo: `${location.origin}/auth/callback`,
-        redirectTo: `${location.origin}/`, // Redirect back to root for middleware to handle
+        redirectTo: `${location.origin}/auth/callback`, // Redirect to the dedicated callback route
       },
     });
 
@@ -28,22 +27,7 @@ export default function LoginPage() {
     }
   };
 
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // On successful sign-in via OAuth callback, redirect
-        if (event === "SIGNED_IN" && session) {
-          router.push("/chat/new");
-          // router.refresh(); // Optional: uncomment if server components need immediate refresh
-        }
-      }
-    );
-
-    // Cleanup listener on component unmount
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [supabase, router]); // Add dependencies
+  // Removed useEffect hook for onAuthStateChange
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
