@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
     const supabase = await createServer(); // Use the helper function
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Redirect to the intended destination (e.g., /chat/new)
-      return NextResponse.redirect(`${origin}${next}`);
+      // Redirect to the intended destination (e.g., /chat/new) relative to the request URL
+      return NextResponse.redirect(new URL(next, request.url));
     } else {
       console.error("Auth Callback Error:", error.message);
     }
