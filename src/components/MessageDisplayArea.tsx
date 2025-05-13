@@ -101,7 +101,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
         ref={scrollAreaViewportRef}
         className="h-full w-full"
       >
-        <div className="flex flex-col min-h-full p-4 md:p-6 lg:p-8">
+        <div className="flex flex-col min-h-full p-4 md:p-6 lg:p-8 pb-28">
           {/* Initial Loading State */}
           {showInitialLoading && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-secondary">
@@ -135,7 +135,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
           {showNewChatInitialState && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-primary">
               {/* Category Buttons */}
-              <div className="flex flex-wrap justify-center gap-3 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 w-full max-w-lg">
                 {" "}
                 {/* Added flex-wrap */}
                 {(Object.keys(categories) as CategoryName[]).map((catName) => {
@@ -145,7 +145,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
                     <button
                       key={catName}
                       onClick={() => setSelectedCategory(catName)}
-                      className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      className={`px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors ${
                         isActive
                           ? "bg-btn-primary text-white"
                           : "bg-bg-input hover:bg-opacity-80"

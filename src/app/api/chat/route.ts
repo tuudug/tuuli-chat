@@ -85,6 +85,9 @@ export async function POST(req: Request) {
         ? lastUserMessage.content
         : JSON.stringify(lastUserMessage.content);
 
+    // Limit context to the last 5 messages
+    const recentMessages = messages.slice(-5);
+
     // 2. Handle new chat (non-streaming first response) vs. existing chat (streaming)
     if (isNewChat) {
       // --- Handle FIRST MESSAGE of a NEW CHAT (Non-Streaming) ---
@@ -127,7 +130,7 @@ export async function POST(req: Request) {
       // Generate the first AI response (non-streaming)
       const { text: aiResponseText, finishReason } = await generateText({
         model: google(modelId),
-        messages: [systemPrompt, ...messages], // Prepend system prompt
+        messages: [systemPrompt, ...recentMessages], // Use sliced messages
       });
 
       // Save the first AI response
@@ -193,7 +196,7 @@ export async function POST(req: Request) {
       // Save the AI response after the stream completes using onFinish
       const result = streamText({
         model: google(modelId),
-        messages: [systemPrompt, ...messages], // Prepend system prompt
+        messages: [systemPrompt, ...recentMessages], // Use sliced messages
         async onFinish({ text, finishReason }) {
           // Ensure the stream finished successfully before saving
           if (finishReason === "stop" || finishReason === "length") {

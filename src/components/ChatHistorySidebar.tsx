@@ -3,9 +3,9 @@
 import React from "react"; // Removed useState, useEffect
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation"; // Added useRouter
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-// Removed RealtimeChannel, createClient imports as they are handled in layout
+import { createClient } from "@/lib/supabase/client"; // Added createClient
 // import * as Separator from "@radix-ui/react-separator"; // Separator removed
 import { PlusIcon, MessageSquareIcon } from "lucide-react";
 import { Tables } from "@/types/supabase"; // Import generated types
@@ -21,6 +21,7 @@ export default function ChatHistorySidebar({
   loading, // Destructure loading
 }: ChatHistorySidebarProps) {
   const params = useParams(); // Get params
+  const router = useRouter(); // Get router instance
   const currentChatId = params?.chatId as string | undefined; // Extract chatId
 
   // Removed internal state and useEffect
@@ -76,7 +77,6 @@ export default function ChatHistorySidebar({
       {/* Scrollable Chat List - Added padding here */}
       <ScrollArea.Root className="flex-1 overflow-hidden w-full px-3">
         {" "}
-        {/* Ensure full width and add padding */}
         <ScrollArea.Viewport className="h-full w-full rounded">
           {" "}
           {/* Removed inner padding */}
@@ -118,10 +118,23 @@ export default function ChatHistorySidebar({
         </ScrollArea.Scrollbar>
         <ScrollArea.Corner className="bg-transparent" />
       </ScrollArea.Root>
-      {/* TODO: Add User Info/Logout Section */}
-      {/* <div className="mt-auto p-2 border-t border-border-primary">
-        User Info
-      </div> */}
+      {/* User Info/Logout Section */}
+      <div className="sticky bottom-0 z-10 bg-bg-sidebar p-2 border-t border-border-primary">
+        <button
+          onClick={async () => {
+            const supabase = createClient();
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+              console.error("Error logging out:", error.message);
+            } else {
+              router.push("/");
+            }
+          }}
+          className="w-full px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+        >
+          Logout
+        </button>
+      </div>
     </div>
   );
 }

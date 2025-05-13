@@ -40,7 +40,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   return (
-    <div className="sm:px-4 md:px-16 pb-3 pt-1">
+    <div className="sm:px-4 md:px-16 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full">
       {" "}
       {/* Padding starts from sm breakpoint */}
       <form
