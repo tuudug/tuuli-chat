@@ -1,14 +1,28 @@
 "use client"; // Mark this component as a Client Component
 
-import React from "react"; // Removed useEffect
+import React, { useEffect } from "react"; // Add useEffect
 import Image from "next/image"; // Import Image
-// Removed useRouter
+import { useRouter } from "next/navigation"; // Add useRouter
 import { Slot } from "@radix-ui/react-slot"; // Import Slot
 import { createClient } from "@/lib/supabase/client"; // Use the client-side Supabase client
 
 export default function LoginPage() {
   const supabase = createClient();
-  // Removed router instance
+  const router = useRouter(); // Add router
+
+  // Add useEffect to check auth status and redirect if logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        router.replace("/chat/new");
+      }
+    };
+
+    checkUser();
+  }, [supabase.auth, router]);
 
   const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({

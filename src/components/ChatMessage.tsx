@@ -18,17 +18,22 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     message.role === "assistant" &&
     message.model_used === "gemini-2.5-pro-preview-05-06";
 
-  // Get friendly model name if it's an assistant message
+  // Get model identifier, preferring message.model_used, then fallback to message.data.ui_model_used
+  const modelIdentifier = message.model_used || message.data?.ui_model_used;
+
   const modelName =
-    message.role === "assistant" && message.model_used
-      ? MODEL_DETAILS.find((m) => m.id === message.model_used)?.name
+    message.role === "assistant" && modelIdentifier
+      ? MODEL_DETAILS.find((m) => m.id === modelIdentifier)?.name
       : null;
 
-  // Use created_at from our Message type
-  const timestamp = new Date(message.created_at).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Use created_at, fallback to ui_created_at from message.data for immediate display
+  const createdAtSource = message.created_at || message.data?.ui_created_at;
+  const timestamp = createdAtSource
+    ? new Date(createdAtSource).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : ""; // Display empty or a placeholder if no date is available
 
   // Gradient border style for Pro model messages
   const proBorderStyle = isProModel

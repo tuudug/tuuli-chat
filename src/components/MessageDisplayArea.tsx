@@ -6,6 +6,7 @@ import {
   AtomIcon, // Physics
   FlaskConicalIcon, // Chemistry
   CodeIcon, // Code
+  BotIcon,
 } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";
@@ -112,8 +113,8 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
           {/* Initial Error State */}
           {showInitialError && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-secondary">
-              <MessageSquareIcon className="mb-4 h-12 w-12 text-red-500" />
-              <p className="text-lg font-medium text-red-500">
+              <MessageSquareIcon className="mb-4 h-12 w-12 text-red-300" />
+              <p className="text-lg font-medium text-red-400">
                 Error Loading Chat
               </p>
               <p className="text-sm">{initialMessagesError}</p>
@@ -212,9 +213,13 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
             })()}
           {/* Display unified response errors */}
           {responseError && (
-            <div className="mt-4 p-3 rounded-lg bg-red-100 text-red-700 border border-red-300">
-              <p className="font-medium">Error:</p>
-              <p className="text-sm">{responseError}</p>
+            <div className="flex justify-center w-full my-4">
+              <div className="max-w-[75%]">
+                <div className="p-3 rounded-lg bg-bg-input text-red-400 border border-red-200">
+                  <p className="font-medium text-sm">Error</p>
+                  <p className="text-sm whitespace-pre-wrap">{responseError}</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
