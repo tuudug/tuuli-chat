@@ -6,7 +6,6 @@ import {
   AtomIcon, // Physics
   FlaskConicalIcon, // Chemistry
   CodeIcon, // Code
-  BotIcon,
 } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";

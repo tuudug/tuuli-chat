@@ -16,7 +16,7 @@ import {
   Star,
 } from "lucide-react";
 import { Tables } from "@/types/supabase";
-import { UserProfile, LIMITS, MODEL_DETAILS } from "@/lib/types";
+import { UserProfile, LIMITS } from "@/lib/types";
 
 // Define props interface
 interface ChatHistorySidebarProps {
@@ -47,7 +47,7 @@ export default function ChatHistorySidebar({
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [countdown, setCountdown] = useState<string>("");
-  const [tooltipText, setTooltipText] = useState<string>("");
+  const [_tooltipText, setTooltipText] = useState<string>("");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -105,19 +105,6 @@ export default function ChatHistorySidebar({
       setTooltipText("Loading profile...");
       return;
     }
-
-    const proLimit = userProfile.is_verified
-      ? LIMITS.VERIFIED.PRO_MESSAGES_PER_DAY
-      : LIMITS.NON_VERIFIED.PRO_MESSAGES_PER_DAY;
-    const generalLimit = userProfile.is_verified
-      ? "Unlimited"
-      : LIMITS.NON_VERIFIED.GENERAL_MESSAGES_PER_DAY;
-
-    // Get the pro model details
-    const proModel = MODEL_DETAILS.find(
-      (model) => model.id === LIMITS.PRO_MODEL_ID
-    );
-    const proModelName = proModel?.name || "Pro Model";
 
     // Interval to update countdown
     const intervalId = setInterval(() => {

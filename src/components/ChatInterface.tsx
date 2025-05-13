@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "ai/react";
-import { type CoreMessage } from "ai";
+import { type CoreMessage, Message as AIMessage } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import {
   Message,
@@ -14,6 +14,15 @@ import {
 import ChatHeader from "./ChatHeader";
 import MessageDisplayArea from "./MessageDisplayArea";
 import ChatInputArea from "./ChatInputArea";
+
+// Bridge interface to satisfy TypeScript
+interface BridgeMessage extends Omit<CoreMessage, "data"> {
+  id: string;
+  createdAt?: Date;
+  created_at?: string;
+  model_used?: string;
+  [key: string]: unknown;
+}
 
 interface ChatInterfaceProps {
   chatId: string;
@@ -131,26 +140,29 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       }
     },
     onFinish: (message) => {
-      // Ensure the final message list conforms to our Message type
-      setMessages((currentMessages) =>
-        currentMessages.map((msg) => {
+      // Use double type assertion to bridge the incompatible types
+      setMessages((currentMessages) => {
+        const typedMessages = currentMessages as unknown as (AIMessage & {
+          model_used?: string;
+          created_at?: string;
+        })[];
+        return typedMessages.map((msg) => {
           // If this is the message that just finished streaming
           if (msg.id === message.id && msg.role === "assistant") {
             return {
               ...msg,
-              model_used: selectedModel, // Add the model used for this response
+              model_used: selectedModel,
               created_at:
-                msg.createdAt?.toISOString() || new Date().toISOString(), // Ensure created_at exists
-            } as Message; // Cast to our Message type
+                msg.createdAt?.toISOString() || new Date().toISOString(),
+            };
           }
-          // Ensure other messages also conform (especially user messages from useChat)
           return {
             ...msg,
             created_at:
               msg.createdAt?.toISOString() || new Date().toISOString(),
-          } as Message;
-        })
-      );
+          };
+        }) as unknown as AIMessage[];
+      });
       setIsWaitingForResponse(false);
     },
     onError: (err) => {
@@ -170,8 +182,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       setInitialMessagesError(null);
     } else if (chatId && !initialMessagesFetched) {
       fetchInitialData().then(({ initialMessages, fetchedModel }) => {
-        // Ensure fetched messages also conform (they should already have created_at from DB)
-        setMessages(initialMessages as Message[]);
+        // Use double casting to avoid type errors
+        setMessages(initialMessages as unknown as AIMessage[]);
         setSelectedModel(fetchedModel);
       });
     }
