@@ -66,7 +66,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             {isUser ? (
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
             ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-white">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
