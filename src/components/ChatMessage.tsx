@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import { UserIcon, BotIcon } from "lucide-react";
+import { UserIcon, BotIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"; // Added ArrowUpIcon and ArrowDownIcon
 import { Message, MODEL_DETAILS } from "@/lib/types"; // Use our Message type and MODEL_DETAILS
 
 interface ChatMessageProps {
@@ -17,6 +17,24 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   const isProModel =
     message.role === "assistant" &&
     message.model_used === "gemini-2.5-pro-preview-05-06";
+
+  // Extract attachment data if present (for user messages with images)
+  // Prioritize DB fields for URL, then fallback to local data for preview
+  const localAttachmentPreview = message.data?.attachment as
+    | { type: string; content: string; name: string }
+    | undefined;
+
+  const imageUrl = message.attachment_url;
+  const imageName = message.attachment_name || localAttachmentPreview?.name;
+  const imageType = message.attachment_type || localAttachmentPreview?.type;
+
+  const displayableImageSrc =
+    imageUrl ||
+    (localAttachmentPreview?.type?.startsWith("image/")
+      ? localAttachmentPreview?.content
+      : null);
+  const isImageAttachment =
+    isUser && imageType?.startsWith("image/") && displayableImageSrc;
 
   // Get model identifier, preferring message.model_used, then fallback to message.data.ui_model_used
   const modelIdentifier = message.model_used || message.data?.ui_model_used;
@@ -69,7 +87,18 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             } ${isProModel ? "rounded-[7px]" : ""}`} // Slightly smaller radius inside border
           >
             {isUser ? (
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <div className="text-sm">
+                {isImageAttachment && displayableImageSrc && (
+                  <div className="mb-2">
+                    <img
+                      src={displayableImageSrc}
+                      alt={imageName || "Uploaded image"}
+                      className="max-w-xs max-h-64 rounded-md object-contain"
+                    />
+                  </div>
+                )}
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              </div>
             ) : (
               <div className="prose prose-sm dark:prose-invert max-w-none text-white">
                 <ReactMarkdown
@@ -90,7 +119,22 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           } transition-opacity`}
         >
           {modelName && <span className="font-medium">{modelName}</span>}
+          {modelName && timestamp && <span>•</span>}
           <span>{timestamp}</span>
+          {(message.prompt_tokens != null ||
+            message.completion_tokens != null) && (
+            <>
+              <span>•</span>
+              <span className="flex items-center">
+                <ArrowUpIcon size={12} className="mr-0.5" />
+                {message.prompt_tokens ?? "N/A"}
+              </span>
+              <span className="flex items-center">
+                <ArrowDownIcon size={12} className="mr-0.5" />
+                {message.completion_tokens ?? "N/A"}
+              </span>
+            </>
+          )}
         </div>
       </div>
 

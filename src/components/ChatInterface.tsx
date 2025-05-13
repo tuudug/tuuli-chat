@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "ai/react";
-import { type CoreMessage, Message as AIMessage } from "ai";
+import { Message as AIMessage, type Attachment } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import {
   Message,
@@ -15,15 +15,6 @@ import ChatHeader from "./ChatHeader";
 import MessageDisplayArea from "./MessageDisplayArea";
 import ChatInputArea from "./ChatInputArea";
 
-// Bridge interface to satisfy TypeScript
-interface BridgeMessage extends Omit<CoreMessage, "data"> {
-  id: string;
-  createdAt?: Date;
-  created_at?: string;
-  model_used?: string;
-  [key: string]: unknown;
-}
-
 interface ChatInterfaceProps {
   chatId: string;
 }
@@ -31,6 +22,16 @@ interface ChatInterfaceProps {
 export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   const router = useRouter();
   const supabase = createClient();
+
+  // Helper function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   const [selectedModel, setSelectedModel] =
     useState<GeminiModelId>(DEFAULT_MODEL_ID); // Use new default
@@ -126,14 +127,15 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     handleSubmit,
     error: _chatError, // UseChat error isn't displayed directly anymore
     setMessages,
+    // append, // No longer using append directly for attachments
     data,
   } = useChat({
     api: "/api/chat",
     id: chatId !== "new" ? chatId : undefined,
     initialMessages: [],
-    body: {
-      modelId: selectedModel,
-    },
+    // body: { // modelId will be sent in handleSubmit's data option
+    //   modelId: selectedModel,
+    // },
     onResponse: (response) => {
       if (!response.ok) {
         console.error("Streaming API response error:", response.statusText);
@@ -201,73 +203,130 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     }
   }, [data, chatId, router]);
 
-  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFormSubmit = async (
+    e: React.FormEvent<HTMLFormElement>,
+    attachmentFile?: File | null // Renamed to avoid confusion with the 'attachment' key in dataForBackend
+  ) => {
     e.preventDefault();
     setResponseError(null);
     setIsWaitingForResponse(true);
 
-    const currentInput = input;
-    if (!currentInput.trim()) {
+    const currentInputVal = input;
+    if (!currentInputVal.trim() && !attachmentFile) {
       setIsWaitingForResponse(false);
       return;
     }
 
-    if (chatId === "new") {
+    let attachmentsForSdk: Attachment[] | undefined = undefined;
+    let localAttachmentPreviewData:
+      | { type?: string; content?: string; name?: string }
+      | undefined = undefined;
+    let attachmentMetadataForBackend:
+      | {
+          attachment_url: string;
+          attachment_name: string;
+          attachment_type: string;
+        }
+      | undefined = undefined;
+
+    if (attachmentFile) {
+      // For local preview, always generate base64
       try {
-        const firstUserMessage: CoreMessage = {
-          role: "user",
-          content: currentInput,
+        const base64String = await fileToBase64(attachmentFile);
+        localAttachmentPreviewData = {
+          type: attachmentFile.type,
+          content: base64String,
+          name: attachmentFile.name,
         };
 
-        const response = await fetch("/api/chat", {
+        // Now, upload to our backend to get a public URL for the SDK and DB
+        const uploadResponse = await fetch("/api/upload-attachment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: [firstUserMessage],
-            data: { modelId: selectedModel },
+            fileContent: base64String, // Send the base64 string
+            fileName: attachmentFile.name,
+            fileType: attachmentFile.type,
+            chatId: chatId,
           }),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error || `HTTP error! Status: ${response.status}`
-          );
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error || "File upload failed");
         }
 
-        const result = await response.json();
-        const newChatId = result.chatId;
+        const uploadedAttachment = await uploadResponse.json();
 
-        if (!newChatId) {
-          throw new Error("API did not return a new chat ID.");
+        if (
+          attachmentFile.type.startsWith("image/") ||
+          attachmentFile.type.startsWith("text/")
+        ) {
+          attachmentsForSdk = [
+            {
+              name: uploadedAttachment.name,
+              contentType: uploadedAttachment.type,
+              url: uploadedAttachment.publicUrl,
+            },
+          ];
         }
-
-        router.push(`/chat/${newChatId}`);
+        attachmentMetadataForBackend = {
+          attachment_url: uploadedAttachment.publicUrl,
+          attachment_name: uploadedAttachment.name,
+          attachment_type: uploadedAttachment.type,
+        };
       } catch (error) {
-        console.error("Error submitting first message:", error);
+        console.error("Error processing or uploading attachment:", error);
         setResponseError(
-          error instanceof Error ? error.message : "Failed to start chat."
+          error instanceof Error
+            ? error.message
+            : "Failed to process attachment."
         );
-      } finally {
         setIsWaitingForResponse(false);
+        return;
       }
-    } else {
-      handleSubmit(e, {
-        data: {
-          modelId: selectedModel,
-          chatId: chatId,
-        },
-      });
     }
+
+    const dataForBackend = {
+      modelId: selectedModel,
+      ...(chatId !== "new" && { chatId: chatId }),
+    } as {
+      modelId: GeminiModelId;
+      chatId?: string;
+      attachment_url?: string;
+      attachment_name?: string;
+      attachment_type?: string;
+      attachment?: {
+        // Renamed from local_attachment_preview to match ChatMessage.tsx
+        type?: string;
+        content?: string;
+        name?: string;
+      };
+    };
+
+    if (attachmentMetadataForBackend) {
+      dataForBackend.attachment_url =
+        attachmentMetadataForBackend.attachment_url;
+      dataForBackend.attachment_name =
+        attachmentMetadataForBackend.attachment_name;
+      dataForBackend.attachment_type =
+        attachmentMetadataForBackend.attachment_type;
+    }
+
+    if (localAttachmentPreviewData) {
+      dataForBackend.attachment = localAttachmentPreviewData; // Changed key here
+    }
+
+    handleSubmit(e, {
+      experimental_attachments: attachmentsForSdk,
+      data: dataForBackend,
+    });
   };
 
   const handleExampleQuestionClick = (question: string) => {
     handleInputChange({
       target: { value: question },
     } as ChangeEvent<HTMLTextAreaElement>);
-    // Optionally, focus the input after setting the value
-    // const inputElement = document.querySelector('textarea'); // Find a better way to select if needed
-    // inputElement?.focus();
   };
 
   return (
@@ -275,14 +334,14 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       <ChatHeader title={chatTitle} />
 
       <MessageDisplayArea
-        messages={messages as unknown as Message[]} // Use double cast
+        messages={messages as unknown as Message[]}
         chatId={chatId}
         initialFetchLoading={initialFetchLoading}
         initialMessagesError={initialMessagesError}
         isWaitingForResponse={isWaitingForResponse}
         responseError={responseError}
         onExampleQuestionClick={handleExampleQuestionClick}
-        selectedModel={selectedModel} // Pass selectedModel down
+        selectedModel={selectedModel}
       />
 
       <ChatInputArea

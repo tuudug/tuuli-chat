@@ -67,6 +67,13 @@ export type Database = {
           model_used: string | null;
           role: string;
           user_id: string;
+          attachment_url?: string | null; // Added
+          attachment_name?: string | null; // Added
+          attachment_type?: string | null; // Added
+          prompt_tokens?: number | null;
+          completion_tokens?: number | null;
+          total_tokens?: number | null;
+          usage_metadata?: Json | null;
         };
         Insert: {
           chat_id: string;
@@ -76,6 +83,13 @@ export type Database = {
           model_used?: string | null;
           role: string;
           user_id: string;
+          attachment_url?: string | null; // Added
+          attachment_name?: string | null; // Added
+          attachment_type?: string | null; // Added
+          prompt_tokens?: number | null;
+          completion_tokens?: number | null;
+          total_tokens?: number | null;
+          usage_metadata?: Json | null;
         };
         Update: {
           chat_id?: string;
@@ -85,6 +99,13 @@ export type Database = {
           model_used?: string | null;
           role?: string;
           user_id?: string;
+          attachment_url?: string | null; // Added
+          attachment_name?: string | null; // Added
+          attachment_type?: string | null; // Added
+          prompt_tokens?: number | null;
+          completion_tokens?: number | null;
+          total_tokens?: number | null;
+          usage_metadata?: Json | null;
         };
         Relationships: [
           {
@@ -98,41 +119,33 @@ export type Database = {
       };
       user_profiles: {
         Row: {
-          id: string;
-          is_verified: boolean;
+          created_at: string;
           daily_message_count: number;
           daily_pro_message_count: number;
+          id: string;
+          is_verified: boolean;
           last_message_reset_at: string;
-          created_at: string;
           updated_at: string;
         };
         Insert: {
-          id: string;
-          is_verified?: boolean;
+          created_at?: string;
           daily_message_count?: number;
           daily_pro_message_count?: number;
+          id: string;
+          is_verified?: boolean;
           last_message_reset_at?: string;
-          created_at?: string;
           updated_at?: string;
         };
         Update: {
-          id?: string;
-          is_verified?: boolean;
+          created_at?: string;
           daily_message_count?: number;
           daily_pro_message_count?: number;
+          id?: string;
+          is_verified?: boolean;
           last_message_reset_at?: string;
-          created_at?: string;
           updated_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "user_profiles_id_fkey";
-            columns: ["id"];
-            isOneToOne: true;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: [];
       };
     };
     Views: {

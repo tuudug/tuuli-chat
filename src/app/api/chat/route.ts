@@ -5,12 +5,11 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import type { Tables } from "../../../types/supabase";
+import type { Tables, TablesInsert } from "../../../types/supabase";
 import { LIMITS, type GeminiModelId } from "../../../lib/types";
 
 export const runtime = "edge";
 
-// Use the provider-specific function to initialize
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY || "",
 });
@@ -21,107 +20,81 @@ const systemPrompt: CoreMessage = {
     "System Prompt: Keep your responses concise and to the point. Avoid over-explaining unless the user explicitly asks for more detail.",
 };
 
-// Define the expected request body structure from the Vercel AI SDK useChat hook
 interface ChatRequestBody {
   messages: CoreMessage[];
   data?: {
-    modelId?: GeminiModelId; // Use specific model ID type
+    modelId?: GeminiModelId;
     chatId?: string;
+    attachment?: {
+      type: string;
+      content: string;
+      name: string;
+    };
+    attachment_url?: string;
+    attachment_name?: string;
+    attachment_type?: string;
+    local_attachment_preview?: {
+      type?: string;
+      content?: string;
+      name?: string;
+    };
   };
 }
 
-// Helper function to get current UTC date as YYYY-MM-DD
 function getCurrentUtcDateString() {
   return new Date().toISOString().split("T")[0];
 }
 
 export async function POST(req: Request) {
-  const supabaseUserClient = await createSupabaseUserContextClient(); // Client for user context (auth)
-  const supabaseServiceAdmin = createSupabaseServiceRoleClient(); // Client for admin operations (service role)
+  const supabaseUserClient = await createSupabaseUserContextClient();
+  const supabaseServiceAdmin = createSupabaseServiceRoleClient();
 
   const {
     data: { user },
     error: authError,
-  } = await supabaseUserClient.auth.getUser(); // Changed to supabaseUserClient
+  } = await supabaseUserClient.auth.getUser();
 
   if (authError || !user) {
     console.error("API Auth Error:", authError?.message, authError);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch user profile
-  const userProfileResult = await supabaseServiceAdmin // Made const, using service client for profile read
-    .from("user_profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  const profileError = userProfileResult.error;
-  let userProfile = userProfileResult.data as Tables<"user_profiles"> | null;
-
-  if (profileError && profileError.code !== "PGRST116") {
-    // PGRST116: single row not found
-    console.error(
-      "Error fetching user profile:",
-      profileError.message,
-      profileError
-    );
-    return NextResponse.json(
-      { error: "Error fetching user profile." },
-      { status: 500 }
-    );
-  }
+  let userProfile = (
+    await supabaseServiceAdmin
+      .from("user_profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+  ).data as Tables<"user_profiles"> | null;
 
   if (!userProfile) {
-    // This case should ideally be handled by the DB trigger that creates a profile on new user signup.
-    // If it still occurs, it indicates an issue with the trigger or a user exists in auth.users but not user_profiles.
-    // For robustness, we could attempt to create one here, but it's better to rely on the trigger.
-    console.warn(
-      `User profile not found for user ${user.id}. A profile should have been auto-created.`
-    );
-    // Attempt to insert a default profile if none exists - this is a fallback.
     const { data: newProfile, error: newProfileError } =
-      await supabaseServiceAdmin // Use service client
+      await supabaseServiceAdmin
         .from("user_profiles")
-        .insert({ id: user.id }) // Defaults will be applied by the DB
+        .insert({ id: user.id })
         .select()
         .single();
     if (newProfileError || !newProfile) {
       console.error(
-        "Failed to create fallback user profile:",
-        newProfileError?.message,
-        newProfileError
+        "Failed to create fallback profile:",
+        newProfileError?.message
       );
       return NextResponse.json(
-        { error: "User profile not found and could not be created." },
+        { error: "User profile issue." },
         { status: 500 }
       );
     }
     userProfile = newProfile;
-    console.log(`Fallback user profile created for user ${user.id}`);
   }
 
-  // After potential creation, if userProfile is still null, something is wrong.
-  if (!userProfile) {
-    console.error(
-      `User profile is unexpectedly null after creation attempt for user ${user.id}.`
-    );
-    return NextResponse.json(
-      { error: "Critical error: User profile could not be established." },
-      { status: 500 }
-    );
-  }
-
-  // Daily Reset Logic
-  // At this point, userProfile is guaranteed to be non-null.
   const currentUtcDateStr = getCurrentUtcDateString();
-  const lastResetDateStr = new Date(userProfile.last_message_reset_at) // No longer possibly null
-    .toISOString()
-    .split("T")[0];
-
-  if (currentUtcDateStr > lastResetDateStr) {
+  if (
+    userProfile &&
+    new Date(userProfile.last_message_reset_at).toISOString().split("T")[0] <
+      currentUtcDateStr
+  ) {
     const { data: updatedProfileData, error: resetError } =
-      await supabaseServiceAdmin // Use service client
+      await supabaseServiceAdmin
         .from("user_profiles")
         .update({
           daily_message_count: 0,
@@ -131,36 +104,15 @@ export async function POST(req: Request) {
         .eq("id", user.id)
         .select()
         .single();
-
-    if (resetError) {
-      console.error(
-        "Error resetting daily counts (update failed):",
-        resetError.message,
-        resetError
-      );
-      // Non-fatal, proceed with potentially stale counts for this request, but log it.
-    } else if (!updatedProfileData) {
-      console.error(
-        "Error resetting daily counts (no data returned after update for user):",
-        user.id
-      );
-      // Non-fatal, proceed with potentially stale counts.
-    } else {
-      // Update the existing userProfile object's properties
-      userProfile.daily_message_count = updatedProfileData.daily_message_count;
-      userProfile.daily_pro_message_count =
-        updatedProfileData.daily_pro_message_count;
-      userProfile.last_message_reset_at =
-        updatedProfileData.last_message_reset_at;
-      console.log(`Daily message counts reset for user ${user.id}`);
-    }
+    if (resetError)
+      console.error("Error resetting daily counts:", resetError.message);
+    else if (updatedProfileData) userProfile = updatedProfileData;
   }
 
   let requestBody: ChatRequestBody;
   try {
     requestBody = await req.json();
-  } catch (parseError) {
-    console.error("API Request Body Parse Error:", parseError);
+  } catch (_parseError) {
     return NextResponse.json(
       { error: "Invalid request body" },
       { status: 400 }
@@ -168,81 +120,61 @@ export async function POST(req: Request) {
   }
 
   const { messages, data } = requestBody;
-  const modelId = data?.modelId || "gemini-2.0-flash-lite"; // Default to a non-pro model
-  let chatId = data?.chatId;
-  const isNewChat = !chatId;
+  const modelId = data?.modelId || "gemini-2.0-flash-lite";
+  const chatIdFromRequest = data?.chatId;
+  const isNewChat = !chatIdFromRequest;
 
   if (!messages || messages.length === 0) {
     return NextResponse.json({ error: "Missing messages" }, { status: 400 });
   }
 
-  // Check Limits
+  if (!userProfile) {
+    return NextResponse.json(
+      { error: "User profile not available." },
+      { status: 500 }
+    );
+  }
+
   const isProModel = modelId === LIMITS.PRO_MODEL_ID;
   let limitExceeded = false;
-
   if (userProfile.is_verified) {
     if (
       isProModel &&
       userProfile.daily_pro_message_count >=
         LIMITS.VERIFIED.PRO_MESSAGES_PER_DAY
-    ) {
+    )
       limitExceeded = true;
-    }
-    // General messages are unlimited for verified users (Infinity check not strictly needed)
   } else {
-    // Non-verified user
     if (
       isProModel &&
       userProfile.daily_pro_message_count >=
         LIMITS.NON_VERIFIED.PRO_MESSAGES_PER_DAY
-    ) {
+    )
       limitExceeded = true;
-    } else if (
+    else if (
       !isProModel &&
       userProfile.daily_message_count >=
         LIMITS.NON_VERIFIED.GENERAL_MESSAGES_PER_DAY
-    ) {
+    )
       limitExceeded = true;
-    }
   }
 
   if (limitExceeded) {
-    console.log(
-      `User ${user.id} exceeded message limit for model ${modelId}. Verified: ${userProfile.is_verified}`
-    );
     return NextResponse.json(
-      {
-        error:
-          "Message limit reached for today. Please try again tomorrow or upgrade for higher limits.",
-      },
-      { status: 429 } // Too Many Requests
+      { error: "Message limit reached." },
+      { status: 429 }
     );
   }
 
-  // If limits are not exceeded, increment count BEFORE making the AI call
   const updateCountField = isProModel
     ? "daily_pro_message_count"
     : "daily_message_count";
-  const { error: countIncrementError } = await supabaseServiceAdmin // Use service client
+  await supabaseServiceAdmin
     .from("user_profiles")
     .update({ [updateCountField]: userProfile[updateCountField] + 1 })
     .eq("id", user.id);
 
-  if (countIncrementError) {
-    console.error(
-      "Error incrementing message count:",
-      countIncrementError.message,
-      countIncrementError
-    );
-    // Non-fatal, proceed with AI call but log the error.
-    // The user got the message through, but their count might be off.
-  }
-
-  let dataStream: StreamData | undefined;
-  if (!isNewChat) {
-    // Initialize StreamData only for streaming responses
-    dataStream = new StreamData();
-  }
+  let dataStreamForResponse: StreamData | undefined; // Renamed to avoid conflict if StreamData is used internally by SDK
 
   try {
     const lastUserMessage = messages[messages.length - 1];
@@ -257,186 +189,146 @@ export async function POST(req: Request) {
       typeof lastUserMessage.content === "string"
         ? lastUserMessage.content
         : JSON.stringify(lastUserMessage.content);
+    const messagesForLlm: CoreMessage[] = messages.map((m) => ({ ...m }));
 
-    const recentMessages = messages.slice(-5);
+    const uploadedAttachmentUrl =
+      (data?.attachment_url as string | null) || null;
+    const savedAttachmentName =
+      (data?.attachment_name as string | null) || null;
+    const savedAttachmentType =
+      (data?.attachment_type as string | null) || null;
+
+    let currentChatId: string;
 
     if (isNewChat) {
-      const title = userMessageContent.substring(0, 50) || "New Chat";
-      const { data: chatData, error: chatError } = await supabaseUserClient // Changed to supabaseUserClient
+      const titleForNewChat =
+        (
+          userMessageContent.substring(0, 40) +
+          (savedAttachmentName
+            ? ` (w/ ${savedAttachmentName.substring(0, 10)}...)`
+            : "")
+        ).substring(0, 50) || "New Chat";
+      const { data: chatData, error: chatError } = await supabaseUserClient
         .from("chats")
-        .insert({ user_id: user.id, title: title })
+        .insert({ user_id: user.id, title: titleForNewChat })
         .select("id")
         .single();
-
       if (chatError || !chatData) {
-        console.error("Error creating new chat:", chatError.message, chatError);
+        console.error("Error creating new chat:", chatError?.message);
         return NextResponse.json(
           { error: "Could not create new chat" },
           { status: 500 }
         );
       }
-      chatId = chatData.id;
-
-      const { error: firstUserMessageError } = await supabaseUserClient // Changed to supabaseUserClient
-        .from("messages")
-        .insert({
-          chat_id: chatId,
-          user_id: user.id,
-          role: "user",
-          content: userMessageContent,
-          model_used: modelId, // Save model used
-        });
-      if (firstUserMessageError) {
-        console.error(
-          "Error saving first user message:",
-          firstUserMessageError.message,
-          firstUserMessageError
-        );
-      }
-
-      const { text: aiResponseText, finishReason } = await generateText({
-        model: google(modelId as GeminiModelId), // Cast modelId
-        messages: [systemPrompt, ...recentMessages],
-      });
-
-      if (finishReason === "stop" || finishReason === "length") {
-        const { error: firstAiMessageError } = await supabaseUserClient // Changed to supabaseUserClient
-          .from("messages")
-          .insert({
-            chat_id: chatId,
-            user_id: user.id,
-            role: "assistant",
-            content: aiResponseText,
-            model_used: modelId, // Save model used
-          });
-        if (firstAiMessageError) {
-          console.error(
-            "Error saving first AI message:",
-            firstAiMessageError.message,
-            firstAiMessageError
-          );
-        }
-      } else {
-        console.error(
-          "AI generation failed for first message. Reason:",
-          finishReason
-        );
-      }
-      return NextResponse.json({ chatId: chatId });
+      currentChatId = chatData.id;
     } else {
-      // Existing chat (streaming)
-      if (!chatId) {
+      if (!chatIdFromRequest) {
         console.error(
-          "Logical error: chatId is missing in existing chat flow."
+          "Error: chatIdFromRequest is undefined for an existing chat."
         );
         return NextResponse.json(
-          { error: "Internal server error: Missing chat ID" },
+          { error: "Missing chat ID for existing chat." },
           { status: 500 }
         );
       }
+      currentChatId = chatIdFromRequest;
+    }
 
-      const { error: messageError } = await supabaseUserClient
-        .from("messages")
-        .insert({
-          // Changed to supabaseUserClient
-          chat_id: chatId,
+    const recentMessagesForLlm = messagesForLlm.slice(-5); // Prepare messages for LLM
+
+    // Save user message (common for both new and existing chats before LLM call)
+    const userMessageToSave: TablesInsert<"messages"> = {
+      chat_id: currentChatId,
+      user_id: user.id,
+      role: "user",
+      content: userMessageContent,
+      model_used: modelId, // Associate user message with the model chosen for the response
+      attachment_url: uploadedAttachmentUrl,
+      attachment_name: savedAttachmentName,
+      attachment_type: savedAttachmentType,
+    };
+    const { error: userMessageSaveError } = await supabaseUserClient
+      .from("messages")
+      .insert(userMessageToSave);
+    if (userMessageSaveError)
+      console.error("Error saving user message:", userMessageSaveError.message);
+
+    if (isNewChat) {
+      const {
+        text: aiResponseText,
+        finishReason,
+        usage,
+        // rawResponse, // Omitting rawResponse for now to avoid potential type issues
+      } = await generateText({
+        model: google(modelId as GeminiModelId),
+        messages: [systemPrompt, ...recentMessagesForLlm],
+      });
+
+      if (finishReason === "stop" || finishReason === "length") {
+        await supabaseUserClient.from("messages").insert({
+          chat_id: currentChatId,
           user_id: user.id,
-          role: "user",
-          content: userMessageContent,
-          model_used: modelId, // Save model used
+          role: "assistant",
+          content: aiResponseText,
+          model_used: modelId,
+          prompt_tokens: usage?.promptTokens,
+          completion_tokens: usage?.completionTokens,
+          total_tokens: usage?.totalTokens,
+          usage_metadata: usage, // Store the usage object
         });
-      if (messageError) {
-        console.error(
-          "Error saving user message:",
-          messageError.message,
-          messageError
-        );
       }
-
-      if (!dataStream) {
-        // Should have been initialized if !isNewChat
-        dataStream = new StreamData();
-      }
+      // For new chats, client expects a JSON response with chatId to navigate
+      return NextResponse.json({ chatId: currentChatId });
+    } else {
+      // Existing chat, use streamText
+      dataStreamForResponse = new StreamData();
 
       const result = streamText({
-        model: google(modelId as GeminiModelId), // Cast modelId
-        messages: [systemPrompt, ...recentMessages],
-        async onFinish({ text, finishReason }) {
+        model: google(modelId as GeminiModelId),
+        messages: [systemPrompt, ...recentMessagesForLlm],
+        async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
           if (finishReason === "stop" || finishReason === "length") {
-            // The message is saved to DB here, which includes model_used and DB-generated created_at
-            const { error: aiSaveError } = await supabaseUserClient
-              .from("messages")
-              .insert({
-                chat_id: chatId!,
-                user_id: user.id,
-                role: "assistant",
-                content: text,
-                model_used: modelId, // Save model used
-              });
-            if (aiSaveError) {
-              console.error(
-                `Error saving streamed AI response for chat ${chatId}:`,
-                aiSaveError.message,
-                aiSaveError
-              );
-            } else {
-              console.log(
-                `Successfully saved streamed AI response for chat ${chatId}`
-              );
-            }
-          } else {
-            console.warn(
-              `Stream for chat ${chatId} finished with reason: ${finishReason}. AI response not saved.`
-            );
+            await supabaseUserClient.from("messages").insert({
+              chat_id: currentChatId,
+              user_id: user.id,
+              role: "assistant",
+              content: text,
+              model_used: modelId,
+              prompt_tokens: usage?.promptTokens,
+              completion_tokens: usage?.completionTokens,
+              total_tokens: usage?.totalTokens,
+              usage_metadata: usage, // Store the usage object
+            });
           }
-          // dataStream?.close(); // Close inside onFinish if appropriate, or after toDataStreamResponse
+          // Append any final data to the stream if needed by client
+          if (dataStreamForResponse) {
+            dataStreamForResponse.append({
+              /* any final metadata if necessary */
+            });
+            dataStreamForResponse.close();
+          }
         },
       });
 
-      // Append custom data to the stream if needed, for example, the modelId used.
-      // dataStream.append({ modelUsed: modelId }); // Example if you want to send this info via stream
+      // Append initial data for client UI (already done by useChat hook, but can add more here)
+      dataStreamForResponse.append({
+        ui_model_used: modelId, // Example: send model used for UI indication
+        ui_created_at: new Date().toISOString(),
+      });
+      // Do not close dataStreamForResponse here, it's closed in onFinish or if an error occurs
 
-      // It's important to close the stream once all data is appended.
-      // If onFinish is the last thing, closing it there or right after returning the response might be options.
-      // For Vercel AI SDK, the stream is typically managed by the library when returning result.toDataStreamResponse().
-      // Let's ensure it's closed if not handled by the library after the response is sent.
-      // The original code had dataStream?.close() after result.toDataStreamResponse(), which might be too late.
-      // Let's try closing it if we are sure no more appends will happen.
-      // However, the SDK might handle this. For now, let's rely on the SDK's stream management.
-      // If issues arise, dataStream.close() can be called in onFinish or after all appends.
-
-      // Append metadata for the client to use immediately
-      if (dataStream) {
-        // Ensure dataStream is defined
-        dataStream.append({
-          // These keys should ideally match what `useChat` or your client-side rendering expects
-          // for an AI message object, or you'll need to adapt the client.
-          // Standard Vercel AI SDK 'experimental_StreamData' often expects these to be part of the core message.
-          // For now, we send them as extra data. Client might need adjustment if it doesn't pick them up.
-          // A more robust way is to ensure the AI SDK message object itself can be populated.
-          // However, sending it in StreamData is a common workaround.
-          ui_model_used: modelId, // Prefixing with ui_ to avoid potential conflicts if SDK has own model_used
-          ui_created_at: new Date().toISOString(), // Client-side timestamp for immediate display
-        });
-        dataStream.close(); // Close the stream now that all data is appended
-      }
-
-      return result.toDataStreamResponse({ data: dataStream });
+      return result.toDataStreamResponse({ data: dataStreamForResponse });
     }
   } catch (error: unknown) {
-    console.error(
-      "API Chat Route Error:",
-      error instanceof Error ? error.message : error,
-      error
-    );
-    let errorMessage = "An internal server error occurred.";
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    // Ensure dataStream is closed in case of an error after it was initialized
-    if (dataStream && typeof dataStream.close === "function") {
-      // Removed !dataStream.isClosed
-      dataStream.close();
+    console.error("API Route Error:", error);
+    let errorMessage = "Internal server error.";
+    if (error instanceof Error) errorMessage = error.message;
+    if (
+      dataStreamForResponse &&
+      typeof dataStreamForResponse.close === "function"
+    ) {
+      // Check before closing
+      dataStreamForResponse.close();
     }
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
