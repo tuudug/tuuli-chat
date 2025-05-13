@@ -1,7 +1,5 @@
 "use client"; // Mark this component as a Client Component
 
-"use client"; // Mark this component as a Client Component
-
 import React from "react"; // Removed useEffect
 import Image from "next/image"; // Import Image
 // Removed useRouter
@@ -38,7 +36,6 @@ export default function LoginPage() {
           width={200}
           height={50}
           className="mb-8 mx-auto" // Added mx-auto to center the image
-          priority
         />
         {/* Use Slot to compose Radix functionality onto a styled button */}
         <Slot>

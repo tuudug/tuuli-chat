@@ -12,8 +12,16 @@ export async function GET(request: NextRequest) {
     const supabase = await createServer(); // Use the helper function
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Redirect to the intended destination (e.g., /chat/new) relative to the request URL
-      return NextResponse.redirect(new URL(next, request.url));
+      // Use environment variable for site URL, fallback to request.url if not set
+      const siteUrlEnv = process.env.NEXT_PUBLIC_SITE_URL;
+      let redirectUrl;
+      if (siteUrlEnv) {
+        redirectUrl = `${siteUrlEnv.replace(/\/$/, "")}${next}`; // Ensure no double slashes
+      } else {
+        // Fallback to using the request's origin if env var is not set
+        redirectUrl = new URL(next, request.url).toString();
+      }
+      return NextResponse.redirect(redirectUrl);
     } else {
       console.error("Auth Callback Error:", error.message);
     }
