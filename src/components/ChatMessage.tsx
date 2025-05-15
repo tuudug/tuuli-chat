@@ -53,6 +53,30 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       })
     : ""; // Display empty or a placeholder if no date is available
 
+  // Derive token counts, preferring direct properties, then message.data
+  // Ensure that the final value is either a number or undefined (to let ?? "N/A" handle it)
+  const rawPromptTokens = message.prompt_tokens ?? message.data?.promptTokens;
+  const promptTokens =
+    typeof rawPromptTokens === "number" ? rawPromptTokens : undefined;
+
+  const rawCompletionTokens =
+    message.completion_tokens ?? message.data?.completionTokens;
+  const completionTokens =
+    typeof rawCompletionTokens === "number" ? rawCompletionTokens : undefined;
+
+  // Log message object for debugging token display
+  if (message.role === "assistant") {
+    console.log("ChatMessage (Assistant):", {
+      id: message.id,
+      contentSnippet: message.content.substring(0, 50),
+      prompt_tokens_direct: message.prompt_tokens,
+      completion_tokens_direct: message.completion_tokens,
+      data_prop: message.data,
+      derived_promptTokens: promptTokens,
+      derived_completionTokens: completionTokens,
+    });
+  }
+
   // Gradient border style for Pro model messages
   const proBorderStyle = isProModel
     ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg" // Apply gradient to a wrapper
@@ -121,17 +145,16 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           {modelName && <span className="font-medium">{modelName}</span>}
           {modelName && timestamp && <span>•</span>}
           <span>{timestamp}</span>
-          {(message.prompt_tokens != null ||
-            message.completion_tokens != null) && (
+          {(promptTokens != null || completionTokens != null) && (
             <>
               <span>•</span>
               <span className="flex items-center">
                 <ArrowUpIcon size={12} className="mr-0.5" />
-                {message.prompt_tokens ?? "N/A"}
+                {promptTokens ?? "N/A"}
               </span>
               <span className="flex items-center">
                 <ArrowDownIcon size={12} className="mr-0.5" />
-                {message.completion_tokens ?? "N/A"}
+                {completionTokens ?? "N/A"}
               </span>
             </>
           )}

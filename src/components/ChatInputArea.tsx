@@ -83,9 +83,9 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   return (
-    <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full mb-20 sm:mb-4">
+    <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full sm:mb-4">
       {" "}
-      {/* Padding starts from sm breakpoint, mb-20 for mobile, mb-4 for larger screens */}
+      {/* Padding starts from sm breakpoint, sm:mb-4 for larger screens, mobile margin removed */}
       <form
         onSubmit={onFormSubmit} // Use the new submit handler
         className="p-3 bg-bg-input rounded-xl border border-transparent focus-within:border-btn-primary transition-colors flex flex-col" // Changed flex direction

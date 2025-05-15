@@ -1,19 +1,26 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
-import { useChat } from "ai/react";
-import { Message as AIMessage, type Attachment } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Message,
-  GeminiModelId,
   DEFAULT_MODEL_ID,
+  GeminiModelId,
+  Message,
   MODEL_DETAILS,
 } from "@/lib/types"; // Use new model types/constants
+import { Message as AIMessage, type Attachment } from "ai"; // Added CoreMessage
+import { useChat } from "ai/react";
+import { useRouter, useSearchParams } from "next/navigation"; // Import useSearchParams
+import React, {
+  ChangeEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"; // Added useRef
+import { v4 as uuidv4 } from "uuid"; // For generating client-side IDs
 import ChatHeader from "./ChatHeader";
-import MessageDisplayArea from "./MessageDisplayArea";
 import ChatInputArea from "./ChatInputArea";
+import MessageDisplayArea from "./MessageDisplayArea";
 
 interface ChatInterfaceProps {
   chatId: string;
@@ -21,7 +28,12 @@ interface ChatInterfaceProps {
 
 export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   const router = useRouter();
+  const searchParams = useSearchParams(); // For reading query params
   const supabase = createClient();
+
+  // Derived state for stable useEffect dependency
+  const isNewChatFlowFromParams = searchParams.get("newChat") === "true";
+  const processedNewChatIdRef = useRef<string | null>(null); // Ref to track processed new chat
 
   // Helper function to convert file to base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -43,6 +55,10 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   >(null);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [responseError, setResponseError] = useState<string | null>(null);
+  const [messageIdToProcessTokens, setMessageIdToProcessTokens] = useState<
+    string | null
+  >(null);
+  const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
 
   const fetchInitialData = useCallback(async () => {
     if (chatId === "new" || !chatId) {
@@ -124,92 +140,424 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     messages,
     input,
     handleInputChange,
-    handleSubmit,
-    error: _chatError, // UseChat error isn't displayed directly anymore
+    handleSubmit: originalHandleSubmit, // Renamed to avoid conflict
+    error: _chatError,
     setMessages,
-    // append, // No longer using append directly for attachments
+    append, // We will use append now
     data,
+    isLoading, // from useChat, can be used for isWaitingForResponse
   } = useChat({
     api: "/api/chat",
-    id: chatId !== "new" ? chatId : undefined,
+    id: chatId !== "new" ? chatId : undefined, // This will be set to client-generated UID for new chats
     initialMessages: [],
-    // body: { // modelId will be sent in handleSubmit's data option
-    //   modelId: selectedModel,
-    // },
     onResponse: (response) => {
       if (!response.ok) {
         console.error("Streaming API response error:", response.statusText);
+        setResponseError(`Error: ${response.status} ${response.statusText}`);
       }
+      setIsWaitingForResponse(false); // Response started, not waiting for initial trigger
     },
-    onFinish: (message) => {
-      // Use double type assertion to bridge the incompatible types
-      setMessages((currentMessages) => {
-        const typedMessages = currentMessages as unknown as (AIMessage & {
-          model_used?: string;
-          created_at?: string;
-        })[];
-        return typedMessages.map((msg) => {
-          // If this is the message that just finished streaming
-          if (msg.id === message.id && msg.role === "assistant") {
-            return {
-              ...msg,
-              model_used: selectedModel,
-              created_at:
-                msg.createdAt?.toISOString() || new Date().toISOString(),
-            };
-          }
-          return {
-            ...msg,
-            created_at:
-              msg.createdAt?.toISOString() || new Date().toISOString(),
-          };
-        }) as unknown as AIMessage[];
-      });
-      setIsWaitingForResponse(false);
+    onFinish: (finishedMessage) => {
+      if (finishedMessage.role === "assistant") {
+        setMessageIdToProcessTokens(finishedMessage.id);
+      }
+      // isLoading from useChat will become false automatically by the SDK
     },
     onError: (err) => {
       console.error("useChat hook error:", err);
       setResponseError(err.message || "An error occurred during streaming.");
-      setIsWaitingForResponse(false);
+      // isLoading from useChat will become false automatically
     },
   });
 
+  // Effect to process token usage when a message finishes
   useEffect(() => {
-    if (chatId === "new") {
+    if (messageIdToProcessTokens && data) {
+      interface TokenUsageUpdateData {
+        type: "token_usage_update";
+        promptTokens?: number;
+        completionTokens?: number;
+        totalTokens?: number;
+      }
+      let tokenDataForCurrentMessage:
+        | {
+            promptTokens?: number;
+            completionTokens?: number;
+            totalTokens?: number;
+          }
+        | undefined = undefined;
+
+      const foundDataObject = [...data]
+        .reverse()
+        .find((item: AIMessage["data"]) => {
+          if (
+            typeof item === "object" &&
+            item !== null &&
+            !Array.isArray(item)
+          ) {
+            return (item as { type?: string }).type === "token_usage_update";
+          }
+          return false;
+        });
+
+      if (foundDataObject) {
+        const tokenUpdate = foundDataObject as unknown as TokenUsageUpdateData;
+        tokenDataForCurrentMessage = {
+          promptTokens: tokenUpdate.promptTokens,
+          completionTokens: tokenUpdate.completionTokens,
+          totalTokens: tokenUpdate.totalTokens,
+        };
+      }
+
+      if (tokenDataForCurrentMessage) {
+        setMessages((currentMessages) => {
+          const typedMessages = currentMessages as unknown as (AIMessage & {
+            model_used?: string;
+            created_at?: string;
+          })[];
+          return typedMessages.map((msg) => {
+            if (
+              msg.id === messageIdToProcessTokens &&
+              msg.role === "assistant"
+            ) {
+              const existingMsgData =
+                typeof msg.data === "object" &&
+                msg.data !== null &&
+                !Array.isArray(msg.data)
+                  ? msg.data
+                  : {};
+              const updatedMsgData = {
+                ...existingMsgData,
+                ...tokenDataForCurrentMessage,
+              };
+              return {
+                ...msg,
+                model_used: selectedModel,
+                created_at:
+                  msg.createdAt?.toISOString() || new Date().toISOString(),
+                data: updatedMsgData,
+              };
+            }
+            return {
+              ...msg,
+              created_at:
+                msg.createdAt?.toISOString() || new Date().toISOString(),
+            };
+          }) as unknown as AIMessage[];
+        });
+      }
+      setMessageIdToProcessTokens(null); // Reset after processing
+    }
+  }, [messageIdToProcessTokens, data, setMessages, selectedModel]);
+
+  // Effect for fetching initial data for existing chats
+  useEffect(() => {
+    if (chatId && chatId !== "new" && !initialMessagesFetched) {
+      const isNewChatFlow = searchParams.get("newChat") === "true";
+      if (!isNewChatFlow) {
+        // Only fetch if not part of the new chat flow already handled
+        fetchInitialData().then(({ initialMessages, fetchedModel }) => {
+          setMessages(initialMessages as unknown as AIMessage[]);
+          setSelectedModel(fetchedModel);
+        });
+      }
+    } else if (chatId === "new") {
+      // Reset state for /chat/new route before client-side navigation
       setMessages([]);
       setChatTitle("New Conversation");
-      setSelectedModel(DEFAULT_MODEL_ID); // Use new default
-      setInitialMessagesFetched(false);
+      setSelectedModel(DEFAULT_MODEL_ID);
+      setInitialMessagesFetched(false); // Allow fetch if navigated away and back
       setInitialFetchLoading(false);
       setInitialMessagesError(null);
-    } else if (chatId && !initialMessagesFetched) {
-      fetchInitialData().then(({ initialMessages, fetchedModel }) => {
-        // Use double casting to avoid type errors
-        setMessages(initialMessages as unknown as AIMessage[]);
-        setSelectedModel(fetchedModel);
-      });
+      setResponseError(null);
     }
-  }, [chatId, initialMessagesFetched, fetchInitialData, setMessages]);
+  }, [
+    chatId,
+    initialMessagesFetched,
+    fetchInitialData,
+    setMessages,
+    searchParams,
+  ]);
 
+  // Effect for handling the newChat=true flow
+  useEffect(() => {
+    // Use the derived isNewChatFlowFromParams
+    if (isNewChatFlowFromParams && chatId && chatId !== "new") {
+      if (processedNewChatIdRef.current === chatId) {
+        console.log(
+          `[ChatInterface newChatEffect] Already processed new chat flow for chatId: ${chatId}. Skipping.`
+        );
+        return;
+      }
+
+      console.log(
+        `[ChatInterface newChatEffect] Running for chatId: ${chatId}, newChat=true`
+      );
+      const storageKey = `chat_init_${chatId}`;
+      console.log(
+        `[ChatInterface newChatEffect] Attempting to get item from sessionStorage with key: ${storageKey}`
+      );
+      const storedDataString = sessionStorage.getItem(storageKey);
+      console.log(
+        `[ChatInterface newChatEffect] sessionStorage.getItem result:`,
+        storedDataString
+      );
+
+      if (storedDataString) {
+        try {
+          const storedData = JSON.parse(storedDataString) as {
+            message: string;
+            model: GeminiModelId;
+            attachmentInfo?: {
+              url: string;
+              name: string;
+              type: string;
+              base64Content?: string;
+            };
+          };
+
+          setChatTitle("New Conversation"); // Or generate from message
+          setSelectedModel(storedData.model);
+
+          const userMessageForDisplay: AIMessage = {
+            id: uuidv4(), // local unique ID for display
+            role: "user",
+            content: storedData.message,
+            createdAt: new Date(),
+            // @ts-expect-error // Add custom attachment property for local display
+            attachment: storedData.attachmentInfo?.base64Content
+              ? {
+                  name: storedData.attachmentInfo.name,
+                  type: storedData.attachmentInfo.type,
+                  content: storedData.attachmentInfo.base64Content, // For immediate display
+                }
+              : undefined,
+          };
+          // setMessages([userMessageForDisplay]); // REMOVED: Let append handle adding the user message
+          console.log(
+            "[ChatInterface newChatEffect] User message prepared for display (but not setting directly):",
+            userMessageForDisplay
+          );
+          setInitialMessagesFetched(true); // Mark as fetched to prevent refetch
+
+          // Prepare data for `append`
+          const messageToAppend: { role: "user"; content: string } = {
+            // Ensure content is string for append
+            role: "user",
+            content: storedData.message, // storedData.message is already a string
+          };
+
+          let attachmentsForSdk: Attachment[] | undefined = undefined;
+          if (
+            storedData.attachmentInfo?.url &&
+            (storedData.attachmentInfo.type.startsWith("image/") ||
+              storedData.attachmentInfo.type.startsWith("text/"))
+          ) {
+            attachmentsForSdk = [
+              {
+                name: storedData.attachmentInfo.name,
+                contentType: storedData.attachmentInfo.type,
+                url: storedData.attachmentInfo.url,
+              },
+            ];
+          }
+
+          interface NewChatApiData {
+            // Removed index signature as 'as any' is used
+            chatId: string;
+            modelId: GeminiModelId;
+            attachment_url?: string;
+            attachment_name?: string;
+            attachment_type?: string;
+          }
+
+          const dataForApi: NewChatApiData = {
+            chatId: chatId, // This is the client-generated UID
+            modelId: storedData.model,
+            ...(storedData.attachmentInfo?.url && {
+              attachment_url: storedData.attachmentInfo.url,
+              attachment_name: storedData.attachmentInfo.name,
+              attachment_type: storedData.attachmentInfo.type,
+            }),
+          };
+
+          setIsWaitingForResponse(true); // Manually set waiting state before append
+          append(messageToAppend, {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data: dataForApi as any,
+            experimental_attachments: attachmentsForSdk,
+          });
+
+          sessionStorage.removeItem(`chat_init_${chatId}`);
+          // Clean up URL query param
+          const newPath = `/chat/${chatId}`;
+          router.replace(newPath, { scroll: false }); // Use replace to avoid back button issues
+          processedNewChatIdRef.current = chatId; // Mark as processed
+        } catch (parseError) {
+          console.error(
+            `[ChatInterface newChatEffect] Error parsing sessionStorage data for key ${storageKey}:`,
+            parseError,
+            "Raw data:",
+            storedDataString
+          );
+          setResponseError(
+            "Failed to initialize new chat: corrupted session data."
+          );
+          sessionStorage.removeItem(storageKey); // Clean up corrupted item
+          processedNewChatIdRef.current = chatId; // Mark as processed even on parse error to prevent loops
+          router.replace("/chat/new", { scroll: false }); // Fallback
+        }
+      } else {
+        console.error(
+          // Changed from warn to error for more visibility
+          `[ChatInterface newChatEffect] CRITICAL: newChat=true but NO data found in sessionStorage for key: ${storageKey}. ChatId: ${chatId}`
+        );
+        // Fallback: treat as a normal empty chat or redirect to /chat/new
+        // Consider not redirecting immediately to allow inspection of the page state if this happens.
+        // For now, keeping the redirect but the error log is critical.
+        setResponseError("Failed to load new chat data. Please try again."); // User-facing error
+        router.replace("/chat/new", { scroll: false });
+      }
+    }
+  }, [
+    chatId,
+    isNewChatFlowFromParams, // Use derived boolean
+    router,
+    setMessages,
+    append,
+    setSelectedModel,
+    supabase,
+    // isNewChatFlowFromParams is already used, searchParams itself is not needed if isNewChatFlowFromParams is stable
+  ]);
+
+  // This effect handles the old redirection logic from useChat's `data` object.
+  // It might conflict or be redundant with the new flow.
+  // Consider removing or adjusting if `data` from `useChat` is still used for redirection.
+  // For now, let's keep it but be aware.
   useEffect(() => {
     if (data && Array.isArray(data) && data.length > 0) {
-      // Assuming the last element in the data array contains our StreamData payload
       const latestStreamDataPayload = data[data.length - 1] as {
         chatId?: string;
       };
+      // This condition `chatId === "new"` will likely not be met if we navigate away from /chat/new immediately.
       if (latestStreamDataPayload?.chatId && chatId === "new") {
-        router.push(`/chat/${latestStreamDataPayload.chatId}`);
+        // This redirection should ideally be handled by the new flow's client-side navigation.
+        // router.push(`/chat/${latestStreamDataPayload.chatId}`);
+        console.warn(
+          "Old redirection logic triggered for chatId=new, this might be unexpected."
+        );
       }
     }
   }, [data, chatId, router]);
 
-  const handleFormSubmit = async (
+  const handleNewChatSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null // Renamed to avoid confusion with the 'attachment' key in dataForBackend
+    attachmentFile?: File | null
   ) => {
     e.preventDefault();
+    if (isWaitingForResponse) return; // Prevent multiple submissions
+
+    const currentInputVal = input;
+    if (!currentInputVal.trim() && !attachmentFile) {
+      return;
+    }
+    setIsWaitingForResponse(true); // Set waiting state early
+
+    const newClientChatId = uuidv4();
+    console.log(
+      `[ChatInterface handleNewChatSubmit] Generated newClientChatId: ${newClientChatId}`
+    );
+    let attachmentInfo:
+      | { url: string; name: string; type: string; base64Content?: string }
+      | undefined = undefined;
+
+    if (attachmentFile) {
+      console.log(
+        `[ChatInterface handleNewChatSubmit] Processing attachment: ${attachmentFile.name}`
+      );
+      try {
+        const base64String = await fileToBase64(attachmentFile); // For preview & upload
+
+        // Upload to get public URL
+        const uploadResponse = await fetch("/api/upload-attachment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileContent: base64String,
+            fileName: attachmentFile.name,
+            fileType: attachmentFile.type,
+            chatId: newClientChatId, // Pass new client chat ID
+          }),
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(
+            errorData.error || "File upload failed during new chat init"
+          );
+        }
+        const uploadedAttachment = await uploadResponse.json();
+        attachmentInfo = {
+          url: uploadedAttachment.publicUrl,
+          name: uploadedAttachment.name,
+          type: uploadedAttachment.type,
+          base64Content: base64String, // Store base64 for immediate preview on new page
+        };
+      } catch (error) {
+        console.error(
+          "Error processing or uploading attachment for new chat:",
+          error
+        );
+        setResponseError(
+          error instanceof Error
+            ? error.message
+            : "Failed to process attachment."
+        );
+        setIsWaitingForResponse(false);
+        return;
+      }
+    }
+
+    const dataToStore = {
+      message: currentInputVal,
+      model: selectedModel,
+      attachmentInfo: attachmentInfo,
+    };
+    console.log(
+      `[ChatInterface handleNewChatSubmit] Data to store in sessionStorage for key chat_init_${newClientChatId}:`,
+      dataToStore
+    );
+
+    try {
+      const storageKey = `chat_init_${newClientChatId}`;
+      sessionStorage.setItem(storageKey, JSON.stringify(dataToStore));
+      console.log(
+        `[ChatInterface handleNewChatSubmit] Successfully setItem in sessionStorage for key: ${storageKey}`
+      );
+
+      // Clear input field after storing data, before navigation
+      handleInputChange({
+        target: { value: "" },
+      } as ChangeEvent<HTMLTextAreaElement>);
+      router.push(`/chat/${newClientChatId}?newChat=true`);
+    } catch (error) {
+      console.error("Error storing new chat data to sessionStorage:", error);
+      setResponseError("Failed to initiate new chat session.");
+      setIsWaitingForResponse(false);
+    }
+    // setIsWaitingForResponse will be reset by the new page load or error handling
+  };
+
+  const handleExistingChatSubmit = async (
+    e: React.FormEvent<HTMLFormElement>,
+    attachmentFile?: File | null
+  ) => {
+    // This is the original handleSubmit logic, now for existing chats
+    e.preventDefault();
+    if (isLoading || isWaitingForResponse) return; // Use isLoading from useChat
+
     setResponseError(null);
-    setIsWaitingForResponse(true);
+    setIsWaitingForResponse(true); // Still useful for immediate UI feedback
 
     const currentInputVal = input;
     if (!currentInputVal.trim() && !attachmentFile) {
@@ -218,9 +566,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     }
 
     let attachmentsForSdk: Attachment[] | undefined = undefined;
-    let localAttachmentPreviewData:
-      | { type?: string; content?: string; name?: string }
-      | undefined = undefined;
     let attachmentMetadataForBackend:
       | {
           attachment_url: string;
@@ -228,34 +573,31 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           attachment_type: string;
         }
       | undefined = undefined;
+    // For existing chats, local preview data is added by useChat hook if we pass it in `append` or `handleSubmit`
+    // We need to ensure the user's message with attachment preview is added to `messages` state correctly.
+    // The `useChat` hook's `append` or `handleSubmit` should handle adding the user message with its attachments to the `messages` array.
 
     if (attachmentFile) {
-      // For local preview, always generate base64
       try {
-        const base64String = await fileToBase64(attachmentFile);
-        localAttachmentPreviewData = {
-          type: attachmentFile.type,
-          content: base64String,
-          name: attachmentFile.name,
-        };
-
-        // Now, upload to our backend to get a public URL for the SDK and DB
+        const base64String = await fileToBase64(attachmentFile); // For upload
+        // Upload to get public URL
         const uploadResponse = await fetch("/api/upload-attachment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            fileContent: base64String, // Send the base64 string
+            fileContent: base64String,
             fileName: attachmentFile.name,
             fileType: attachmentFile.type,
-            chatId: chatId,
+            chatId: chatId, // Existing chatId
           }),
         });
 
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json();
-          throw new Error(errorData.error || "File upload failed");
+          throw new Error(
+            errorData.error || "File upload failed for existing chat"
+          );
         }
-
         const uploadedAttachment = await uploadResponse.json();
 
         if (
@@ -276,7 +618,10 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           attachment_type: uploadedAttachment.type,
         };
       } catch (error) {
-        console.error("Error processing or uploading attachment:", error);
+        console.error(
+          "Error processing or uploading attachment for existing chat:",
+          error
+        );
         setResponseError(
           error instanceof Error
             ? error.message
@@ -287,59 +632,105 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       }
     }
 
-    const dataForBackend = {
-      modelId: selectedModel,
-      ...(chatId !== "new" && { chatId: chatId }),
-    } as {
+    // Define a more specific type for the data payload
+    interface ExistingChatApiData {
+      // Removed index signature as 'as any' is used
       modelId: GeminiModelId;
-      chatId?: string;
+      chatId: string;
       attachment_url?: string;
       attachment_name?: string;
       attachment_type?: string;
-      attachment?: {
-        // Renamed from local_attachment_preview to match ChatMessage.tsx
-        type?: string;
-        content?: string;
-        name?: string;
-      };
+    }
+
+    const dataForApi: ExistingChatApiData = {
+      modelId: selectedModel,
+      chatId: chatId, // Existing chatId
+      ...attachmentMetadataForBackend,
     };
 
-    if (attachmentMetadataForBackend) {
-      dataForBackend.attachment_url =
-        attachmentMetadataForBackend.attachment_url;
-      dataForBackend.attachment_name =
-        attachmentMetadataForBackend.attachment_name;
-      dataForBackend.attachment_type =
-        attachmentMetadataForBackend.attachment_type;
-    }
+    // The userMessageToAppend is implicitly handled by originalHandleSubmit when it takes `e` (the form event)
+    // which allows it to read `input` from its own closure from `useChat`.
+    // We just need to pass the event and the options.
 
-    if (localAttachmentPreviewData) {
-      dataForBackend.attachment = localAttachmentPreviewData; // Changed key here
-    }
+    // Manually add user message with attachment preview for immediate display
+    // The `useChat` hook should ideally handle this if `append` is used correctly.
+    // Let's rely on `originalHandleSubmit` to correctly form the user message with attachments.
+    // Or, if using `append`, we'd do:
+    // const displayMessage: AIMessage = {
+    //   id: uuidv4(),
+    //   role: 'user',
+    //   content: currentInputVal,
+    //   createdAt: new Date(),
+    //   ...(attachmentFile && localAttachmentPreviewDataForDisplay && {
+    //     // @ts-ignore
+    //     attachment: localAttachmentPreviewDataForDisplay
+    //   })
+    // };
+    // setMessages(prev => [...prev, displayMessage]);
+    // append({ role: 'user', content: currentInputVal }, { experimental_attachments: attachmentsForSdk, data: dataForApi });
 
-    handleSubmit(e, {
+    // Using originalHandleSubmit from useChat
+    originalHandleSubmit(e, {
+      // Pass the original event
       experimental_attachments: attachmentsForSdk,
-      data: dataForBackend,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: dataForApi as any,
     });
   };
+
+  // Determine which submit handler to use
+  const activeFormSubmitHandler =
+    chatId === "new" ? handleNewChatSubmit : handleExistingChatSubmit;
 
   const handleExampleQuestionClick = (question: string) => {
     handleInputChange({
       target: { value: question },
     } as ChangeEvent<HTMLTextAreaElement>);
+    // Optionally, auto-focus the input area after clicking an example
+    // document.querySelector('textarea[placeholder="Type your message here..."]')?.focus();
   };
 
+  // Effect for handling visual viewport changes on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.visualViewport) {
+        setDynamicContainerStyle({
+          height: `${window.visualViewport.height}px`,
+        });
+      } else {
+        // Fallback for environments where visualViewport is not available
+        // This might mean no dynamic adjustment, or you could try window.innerHeight
+        // but window.innerHeight doesn't account for the on-screen keyboard.
+        // For now, only adjust if visualViewport is present.
+      }
+    };
+
+    if (typeof window !== "undefined" && window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleResize);
+      handleResize(); // Initial call
+      return () => {
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener("resize", handleResize);
+        }
+      };
+    }
+    // No cleanup needed if visualViewport wasn't available or listener not added
+    return () => {};
+  }, []);
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={dynamicContainerStyle}>
       <ChatHeader title={chatTitle} />
 
       <MessageDisplayArea
         messages={messages as unknown as Message[]}
         chatId={chatId}
-        initialFetchLoading={initialFetchLoading}
+        initialFetchLoading={
+          initialFetchLoading || (isLoading && messages.length === 0)
+        } // Combine loading states
         initialMessagesError={initialMessagesError}
-        isWaitingForResponse={isWaitingForResponse}
-        responseError={responseError}
+        isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
+        responseError={responseError || _chatError?.message || null}
         onExampleQuestionClick={handleExampleQuestionClick}
         selectedModel={selectedModel}
       />
@@ -347,10 +738,10 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       <ChatInputArea
         input={input}
         handleInputChange={handleInputChange}
-        handleFormSubmit={handleFormSubmit}
+        handleFormSubmit={activeFormSubmitHandler} // Use the active handler
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
-        isWaitingForResponse={isWaitingForResponse}
+        isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
       />
     </div>
   );

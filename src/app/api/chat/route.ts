@@ -1,5 +1,5 @@
 // Ensure correct imports from 'ai' and provider
-import { streamText, generateText, type CoreMessage, StreamData } from "ai";
+import { streamText, type CoreMessage, StreamData } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 // Import both client creation functions
 import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/server";
@@ -120,12 +120,19 @@ export async function POST(req: Request) {
   }
 
   const { messages, data } = requestBody;
-  const modelId = data?.modelId || "gemini-2.0-flash-lite";
-  const chatIdFromRequest = data?.chatId;
-  const isNewChat = !chatIdFromRequest;
+  const modelId = data?.modelId || "gemini-2.0-flash-lite"; // Default model
+  const clientProvidedChatId = data?.chatId; // This is the client-generated UID
 
   if (!messages || messages.length === 0) {
     return NextResponse.json({ error: "Missing messages" }, { status: 400 });
+  }
+
+  if (!clientProvidedChatId) {
+    console.error("API Error: Missing clientProvidedChatId in request data.");
+    return NextResponse.json(
+      { error: "Missing chatId in request data" },
+      { status: 400 }
+    );
   }
 
   if (!userProfile) {
@@ -198,9 +205,28 @@ export async function POST(req: Request) {
     const savedAttachmentType =
       (data?.attachment_type as string | null) || null;
 
-    let currentChatId: string;
+    // Use clientProvidedChatId consistently
+    const currentChatId = clientProvidedChatId;
 
-    if (isNewChat) {
+    // Ensure chat record exists in DB
+    const { data: existingChat, error: fetchChatError } =
+      await supabaseUserClient
+        .from("chats")
+        .select("id")
+        .eq("id", currentChatId)
+        .single();
+
+    if (fetchChatError && fetchChatError.code !== "PGRST116") {
+      // PGRST116: 'No rows found' which is fine if we are creating it
+      console.error("Error fetching chat:", fetchChatError.message);
+      return NextResponse.json(
+        { error: "Database error fetching chat." },
+        { status: 500 }
+      );
+    }
+
+    if (!existingChat) {
+      // Chat doesn't exist, create it using clientProvidedChatId
       const titleForNewChat =
         (
           userMessageContent.substring(0, 40) +
@@ -208,37 +234,32 @@ export async function POST(req: Request) {
             ? ` (w/ ${savedAttachmentName.substring(0, 10)}...)`
             : "")
         ).substring(0, 50) || "New Chat";
-      const { data: chatData, error: chatError } = await supabaseUserClient
+
+      const { error: newChatError } = await supabaseUserClient
         .from("chats")
-        .insert({ user_id: user.id, title: titleForNewChat })
-        .select("id")
-        .single();
-      if (chatError || !chatData) {
-        console.error("Error creating new chat:", chatError?.message);
-        return NextResponse.json(
-          { error: "Could not create new chat" },
-          { status: 500 }
-        );
-      }
-      currentChatId = chatData.id;
-    } else {
-      if (!chatIdFromRequest) {
+        .insert({
+          id: currentChatId, // Use client-provided ID
+          user_id: user.id,
+          title: titleForNewChat,
+        });
+
+      if (newChatError) {
         console.error(
-          "Error: chatIdFromRequest is undefined for an existing chat."
+          "Error creating new chat with client-provided ID:",
+          newChatError.message
         );
         return NextResponse.json(
-          { error: "Missing chat ID for existing chat." },
+          { error: "Could not create new chat record" },
           { status: 500 }
         );
       }
-      currentChatId = chatIdFromRequest;
     }
 
     const recentMessagesForLlm = messagesForLlm.slice(-5); // Prepare messages for LLM
 
     // Save user message (common for both new and existing chats before LLM call)
     const userMessageToSave: TablesInsert<"messages"> = {
-      chat_id: currentChatId,
+      chat_id: currentChatId, // This is now always the clientProvidedChatId
       user_id: user.id,
       role: "user",
       content: userMessageContent,
@@ -253,72 +274,50 @@ export async function POST(req: Request) {
     if (userMessageSaveError)
       console.error("Error saving user message:", userMessageSaveError.message);
 
-    if (isNewChat) {
-      const {
-        text: aiResponseText,
-        finishReason,
-        usage,
-        // rawResponse, // Omitting rawResponse for now to avoid potential type issues
-      } = await generateText({
-        model: google(modelId as GeminiModelId),
-        messages: [systemPrompt, ...recentMessagesForLlm],
-      });
+    // ALWAYS use streamText now. The distinction for isNewChat returning JSON is removed.
+    dataStreamForResponse = new StreamData();
 
-      if (finishReason === "stop" || finishReason === "length") {
-        await supabaseUserClient.from("messages").insert({
-          chat_id: currentChatId,
-          user_id: user.id,
-          role: "assistant",
-          content: aiResponseText,
-          model_used: modelId,
-          prompt_tokens: usage?.promptTokens,
-          completion_tokens: usage?.completionTokens,
-          total_tokens: usage?.totalTokens,
-          usage_metadata: usage, // Store the usage object
-        });
-      }
-      // For new chats, client expects a JSON response with chatId to navigate
-      return NextResponse.json({ chatId: currentChatId });
-    } else {
-      // Existing chat, use streamText
-      dataStreamForResponse = new StreamData();
+    const result = streamText({
+      model: google(modelId as GeminiModelId),
+      messages: [systemPrompt, ...recentMessagesForLlm],
+      async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
+        if (finishReason === "stop" || finishReason === "length") {
+          await supabaseUserClient.from("messages").insert({
+            chat_id: currentChatId, // clientProvidedChatId
+            user_id: user.id,
+            role: "assistant",
+            content: text,
+            model_used: modelId,
+            prompt_tokens: usage?.promptTokens,
+            completion_tokens: usage?.completionTokens,
+            total_tokens: usage?.totalTokens,
+            usage_metadata: usage, // Store the usage object
+          });
+        }
+        // Append any final data to the stream if needed by client
+        if (dataStreamForResponse) {
+          // NEW: Append token usage to the data stream
+          dataStreamForResponse.append({
+            type: "token_usage_update", // A type to identify this data on the client
+            promptTokens: usage?.promptTokens,
+            completionTokens: usage?.completionTokens,
+            totalTokens: usage?.totalTokens,
+          });
+          dataStreamForResponse.close(); // Close after appending
+        }
+      },
+    });
 
-      const result = streamText({
-        model: google(modelId as GeminiModelId),
-        messages: [systemPrompt, ...recentMessagesForLlm],
-        async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
-          if (finishReason === "stop" || finishReason === "length") {
-            await supabaseUserClient.from("messages").insert({
-              chat_id: currentChatId,
-              user_id: user.id,
-              role: "assistant",
-              content: text,
-              model_used: modelId,
-              prompt_tokens: usage?.promptTokens,
-              completion_tokens: usage?.completionTokens,
-              total_tokens: usage?.totalTokens,
-              usage_metadata: usage, // Store the usage object
-            });
-          }
-          // Append any final data to the stream if needed by client
-          if (dataStreamForResponse) {
-            dataStreamForResponse.append({
-              /* any final metadata if necessary */
-            });
-            dataStreamForResponse.close();
-          }
-        },
-      });
+    // Append initial data for client UI (e.g., model used, if client wants to confirm)
+    // The client already knows the model, but this is an example.
+    // The main purpose of StreamData here is for the text stream itself.
+    // dataStreamForResponse.append({ // This initial append block can be removed or kept if other initial data is needed.
+    // ui_model_used: modelId, // Example: send model used for UI indication
+    // ui_created_at: new Date().toISOString(),
+    // }); // For now, let's assume no other initial data is strictly needed for this flow.
+    // Do not close dataStreamForResponse here, it's closed in onFinish or if an error occurs
 
-      // Append initial data for client UI (already done by useChat hook, but can add more here)
-      dataStreamForResponse.append({
-        ui_model_used: modelId, // Example: send model used for UI indication
-        ui_created_at: new Date().toISOString(),
-      });
-      // Do not close dataStreamForResponse here, it's closed in onFinish or if an error occurs
-
-      return result.toDataStreamResponse({ data: dataStreamForResponse });
-    }
+    return result.toDataStreamResponse({ data: dataStreamForResponse });
   } catch (error: unknown) {
     console.error("API Route Error:", error);
     let errorMessage = "Internal server error.";

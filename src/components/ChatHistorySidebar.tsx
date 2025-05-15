@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-import * as Tooltip from "@radix-ui/react-tooltip"; // Import Radix UI Tooltip
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { createClient } from "@/lib/supabase/client";
 import {
   PlusIcon,
