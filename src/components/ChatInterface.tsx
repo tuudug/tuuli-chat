@@ -59,6 +59,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     string | null
   >(null);
   const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
+  const [uiReadyForNewChatSetup, setUiReadyForNewChatSetup] = useState(false); // Added state for new chat UI readiness
 
   const fetchInitialData = useCallback(async () => {
     if (chatId === "new" || !chatId) {
@@ -389,6 +390,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           });
 
           sessionStorage.removeItem(`chat_init_${chatId}`);
+          setUiReadyForNewChatSetup(true); // Signal that UI can now be shown with correct model
+
           // Clean up URL query param
           const newPath = `/chat/${chatId}`;
           router.replace(newPath, { scroll: false }); // Use replace to avoid back button issues
@@ -718,31 +721,48 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     return () => {};
   }, []);
 
+  // Determine if the full UI should be shown or a loader for new chat setup
+  const showFullUI =
+    !isNewChatFlowFromParams || // If not in new chat flow, always show
+    (isNewChatFlowFromParams && uiReadyForNewChatSetup); // If in new chat flow, wait for setup
+
   return (
     <div className="flex flex-col h-full" style={dynamicContainerStyle}>
       <ChatHeader title={chatTitle} />
 
-      <MessageDisplayArea
-        messages={messages as unknown as Message[]}
-        chatId={chatId}
-        initialFetchLoading={
-          initialFetchLoading || (isLoading && messages.length === 0)
-        } // Combine loading states
-        initialMessagesError={initialMessagesError}
-        isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
-        responseError={responseError || _chatError?.message || null}
-        onExampleQuestionClick={handleExampleQuestionClick}
-        selectedModel={selectedModel}
-      />
+      {showFullUI ? (
+        <>
+          <MessageDisplayArea
+            messages={messages as unknown as Message[]}
+            chatId={chatId}
+            initialFetchLoading={
+              initialFetchLoading || (isLoading && messages.length === 0)
+            } // Combine loading states
+            initialMessagesError={initialMessagesError}
+            isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
+            responseError={responseError || _chatError?.message || null}
+            onExampleQuestionClick={handleExampleQuestionClick}
+            selectedModel={selectedModel}
+          />
 
-      <ChatInputArea
-        input={input}
-        handleInputChange={handleInputChange}
-        handleFormSubmit={activeFormSubmitHandler} // Use the active handler
-        selectedModel={selectedModel}
-        setSelectedModel={setSelectedModel}
-        isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
-      />
+          <ChatInputArea
+            input={input}
+            handleInputChange={handleInputChange}
+            handleFormSubmit={activeFormSubmitHandler} // Use the active handler
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
+          />
+        </>
+      ) : (
+        // Show a loader or minimal UI while new chat is being set up
+        // Assuming a LoadingSpinner component exists and can be imported or is globally available
+        <div className="flex-grow flex items-center justify-center">
+          {/* You might need to import LoadingSpinner if not already globally available */}
+          {/* For now, using a simple text placeholder if LoadingSpinner isn't defined: */}
+          <div>Loading chat...</div>
+        </div>
+      )}
     </div>
   );
 }
