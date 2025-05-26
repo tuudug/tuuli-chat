@@ -28,7 +28,7 @@ export type Message = {
 
 export type GeminiModelId =
   | "gemini-2.5-pro-preview-05-06"
-  | "gemini-2.5-flash-preview-04-17"
+  | "gemini-2.5-flash-preview-05-20"
   | "gemini-2.0-flash"
   | "gemini-2.0-flash-lite"; // Added new model ID
 
@@ -41,12 +41,12 @@ export interface ModelDetail {
 export const MODEL_DETAILS: ModelDetail[] = [
   {
     id: "gemini-2.5-pro-preview-05-06",
-    name: "Gemini 2.5 Pro",
+    name: "Gemini 2.5 Pro (05-06)",
     stars: 4,
   },
   {
-    id: "gemini-2.5-flash-preview-04-17",
-    name: "Gemini 2.5 Flash",
+    id: "gemini-2.5-flash-preview-05-20",
+    name: "Gemini 2.5 Flash (05-20)",
     stars: 3,
   },
   { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", stars: 2 },

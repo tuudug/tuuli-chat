@@ -9,7 +9,7 @@ export const MODEL_PRICES: Record<
     output: 0.3 / 1_000_000,
   },
   "gemini-2.0-flash": { input: 0.1 / 1_000_000, output: 0.4 / 1_000_000 },
-  "gemini-2.5-flash-preview-04-17": {
+  "gemini-2.5-flash-preview-05-20": {
     input: 0.15 / 1_000_000,
     output: 0.6 / 1_000_000,
   },
