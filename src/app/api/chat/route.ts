@@ -208,11 +208,11 @@ export async function POST(req: Request) {
     // Use clientProvidedChatId consistently
     const currentChatId = clientProvidedChatId;
 
-    // Ensure chat record exists in DB
+    // Ensure chat record exists in DB and belongs to the user
     const { data: existingChat, error: fetchChatError } =
       await supabaseUserClient
         .from("chats")
-        .select("id")
+        .select("id, user_id")
         .eq("id", currentChatId)
         .single();
 
@@ -222,6 +222,17 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Database error fetching chat." },
         { status: 500 }
+      );
+    }
+
+    // If chat exists, verify ownership
+    if (existingChat && existingChat.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to access chat ${currentChatId} owned by ${existingChat.user_id}`
+      );
+      return NextResponse.json(
+        { error: "Unauthorized access to chat." },
+        { status: 403 }
       );
     }
 
