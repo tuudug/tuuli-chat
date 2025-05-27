@@ -195,8 +195,10 @@ export async function POST(req: Request) {
     const userMessageContent =
       typeof lastUserMessage.content === "string"
         ? lastUserMessage.content
-        : JSON.stringify(lastUserMessage.content);
-    const messagesForLlm: CoreMessage[] = messages.map((m) => ({ ...m }));
+        : JSON.stringify(lastUserMessage.content); // Keep this for saving to DB
+
+    // Create a deep copy of messages for modification to avoid altering the original requestBody.messages
+    const messagesForLlm: CoreMessage[] = JSON.parse(JSON.stringify(messages));
 
     const uploadedAttachmentUrl =
       (data?.attachment_url as string | null) || null;
@@ -268,12 +270,41 @@ export async function POST(req: Request) {
 
     const recentMessagesForLlm = messagesForLlm.slice(-5); // Prepare messages for LLM
 
+    // Modify the last user message in recentMessagesForLlm if there's an attachment
+    if (
+      uploadedAttachmentUrl &&
+      savedAttachmentType &&
+      recentMessagesForLlm.length > 0
+    ) {
+      const lastLlmUserMessage =
+        recentMessagesForLlm[recentMessagesForLlm.length - 1];
+      if (lastLlmUserMessage.role === "user") {
+        const originalTextContent =
+          typeof lastLlmUserMessage.content === "string"
+            ? lastLlmUserMessage.content
+            : (Array.isArray(lastLlmUserMessage.content) &&
+                lastLlmUserMessage.content.find((p) => p.type === "text")
+                  ?.text) ||
+              "";
+
+        lastLlmUserMessage.content = [
+          { type: "text", text: originalTextContent },
+          {
+            type: "image", // AI SDK uses 'image' part type for data to be fetched (URL)
+            image: new URL(uploadedAttachmentUrl),
+            mimeType: savedAttachmentType,
+          },
+        ];
+      }
+    }
+
     // Save user message (common for both new and existing chats before LLM call)
+    // IMPORTANT: userMessageContent (the original string) is saved to DB, not the modified array.
     const userMessageToSave: TablesInsert<"messages"> = {
       chat_id: currentChatId, // This is now always the clientProvidedChatId
       user_id: user.id,
       role: "user",
-      content: userMessageContent,
+      content: userMessageContent, // Save the original string content
       model_used: modelId, // Associate user message with the model chosen for the response
       attachment_url: uploadedAttachmentUrl,
       attachment_name: savedAttachmentName,
@@ -290,7 +321,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: google(modelId as GeminiModelId),
-      messages: [systemPrompt, ...recentMessagesForLlm],
+      messages: [systemPrompt, ...recentMessagesForLlm], // Use the potentially modified messages
       async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
         if (finishReason === "stop" || finishReason === "length") {
           await supabaseUserClient.from("messages").insert({

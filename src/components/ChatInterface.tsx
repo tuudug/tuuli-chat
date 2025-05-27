@@ -53,7 +53,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   const [initialMessagesError, setInitialMessagesError] = useState<
     string | null
   >(null);
-  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isAwaitingFirstToken, setIsAwaitingFirstToken] = useState(false); // Renamed state
   const [responseError, setResponseError] = useState<string | null>(null);
   const [messageIdToProcessTokens, setMessageIdToProcessTokens] = useState<
     string | null
@@ -156,7 +156,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         console.error("Streaming API response error:", response.statusText);
         setResponseError(`Error: ${response.status} ${response.statusText}`);
       }
-      setIsWaitingForResponse(false); // Response started, not waiting for initial trigger
+      setIsAwaitingFirstToken(false); // Use renamed setter
     },
     onFinish: (finishedMessage) => {
       if (finishedMessage.role === "assistant") {
@@ -382,7 +382,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             }),
           };
 
-          setIsWaitingForResponse(true); // Manually set waiting state before append
+          setIsAwaitingFirstToken(true); // Manually set waiting state before append
           append(messageToAppend, {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data: dataForApi as any,
@@ -408,18 +408,20 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           );
           sessionStorage.removeItem(storageKey); // Clean up corrupted item
           processedNewChatIdRef.current = chatId; // Mark as processed even on parse error to prevent loops
-          router.replace("/chat/new", { scroll: false }); // Fallback
+          setUiReadyForNewChatSetup(true); // Allow error to be shown
+          // router.replace("/chat/new", { scroll: false }); // Fallback - commented out
         }
       } else {
         console.error(
           // Changed from warn to error for more visibility
           `[ChatInterface newChatEffect] CRITICAL: newChat=true but NO data found in sessionStorage for key: ${storageKey}. ChatId: ${chatId}`
         );
-        // Fallback: treat as a normal empty chat or redirect to /chat/new
-        // Consider not redirecting immediately to allow inspection of the page state if this happens.
-        // For now, keeping the redirect but the error log is critical.
-        setResponseError("Failed to load new chat data. Please try again."); // User-facing error
-        router.replace("/chat/new", { scroll: false });
+        setResponseError(
+          "Critical error: Could not retrieve initial chat data from session. This might be due to browser settings (e.g., 'Block all cookies' can affect sessionStorage) or a bug. Please try starting the new chat again."
+        );
+        setUiReadyForNewChatSetup(true); // Allow error to be shown
+        processedNewChatIdRef.current = chatId; // Mark as processed to prevent loops
+        // router.replace("/chat/new", { scroll: false }); // Fallback - commented out
       }
     }
   }, [
@@ -458,30 +460,53 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     attachmentFile?: File | null
   ) => {
     e.preventDefault();
-    if (isWaitingForResponse) return; // Prevent multiple submissions
+    if (isAwaitingFirstToken || isLoading) return; // Prevent multiple submissions, check isLoading too
 
     const currentInputVal = input;
     if (!currentInputVal.trim() && !attachmentFile) {
       return;
     }
-    setIsWaitingForResponse(true); // Set waiting state early
+    setIsAwaitingFirstToken(true); // Set waiting state early
 
     const newClientChatId = uuidv4();
     console.log(
       `[ChatInterface handleNewChatSubmit] Generated newClientChatId: ${newClientChatId}`
     );
-    let attachmentInfo:
-      | { url: string; name: string; type: string; base64Content?: string }
-      | undefined = undefined;
 
-    if (attachmentFile) {
+    // 1. Generate a preliminary title
+    const preliminaryTitle =
+      currentInputVal.substring(0, 50) || "New Conversation";
+
+    try {
+      // 2. Call the new /api/chat/create endpoint
+      const createChatShellResponse = await fetch("/api/chat/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientChatId: newClientChatId,
+          title: preliminaryTitle,
+        }),
+      });
+
+      if (!createChatShellResponse.ok) {
+        const errorData = await createChatShellResponse.json();
+        throw new Error(errorData.error || "Failed to create chat shell.");
+      }
       console.log(
-        `[ChatInterface handleNewChatSubmit] Processing attachment: ${attachmentFile.name}`
+        `[ChatInterface handleNewChatSubmit] Chat shell created successfully for ${newClientChatId}`
       );
-      try {
-        const base64String = await fileToBase64(attachmentFile); // For preview & upload
 
-        // Upload to get public URL
+      // 3. Proceed with attachment handling (if any) and sessionStorage
+      let attachmentInfo:
+        | { url: string; name: string; type: string; base64Content?: string }
+        | undefined = undefined;
+
+      if (attachmentFile) {
+        console.log(
+          `[ChatInterface handleNewChatSubmit] Processing attachment: ${attachmentFile.name}`
+        );
+        // Attachment processing logic remains largely the same
+        const base64String = await fileToBase64(attachmentFile);
         const uploadResponse = await fetch("/api/upload-attachment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -489,7 +514,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             fileContent: base64String,
             fileName: attachmentFile.name,
             fileType: attachmentFile.type,
-            chatId: newClientChatId, // Pass new client chat ID
+            chatId: newClientChatId,
           }),
         });
 
@@ -504,51 +529,43 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           url: uploadedAttachment.publicUrl,
           name: uploadedAttachment.name,
           type: uploadedAttachment.type,
-          base64Content: base64String, // Store base64 for immediate preview on new page
+          base64Content: base64String,
         };
-      } catch (error) {
-        console.error(
-          "Error processing or uploading attachment for new chat:",
-          error
-        );
-        setResponseError(
-          error instanceof Error
-            ? error.message
-            : "Failed to process attachment."
-        );
-        setIsWaitingForResponse(false);
-        return;
       }
-    }
 
-    const dataToStore = {
-      message: currentInputVal,
-      model: selectedModel,
-      attachmentInfo: attachmentInfo,
-    };
-    console.log(
-      `[ChatInterface handleNewChatSubmit] Data to store in sessionStorage for key chat_init_${newClientChatId}:`,
-      dataToStore
-    );
+      const dataToStore = {
+        message: currentInputVal,
+        model: selectedModel,
+        attachmentInfo: attachmentInfo,
+        // Optionally store the preliminaryTitle if ChatHeader needs it immediately on the new page
+        // title: preliminaryTitle,
+      };
+      console.log(
+        `[ChatInterface handleNewChatSubmit] Data to store in sessionStorage for key chat_init_${newClientChatId}:`,
+        dataToStore
+      );
 
-    try {
       const storageKey = `chat_init_${newClientChatId}`;
       sessionStorage.setItem(storageKey, JSON.stringify(dataToStore));
       console.log(
         `[ChatInterface handleNewChatSubmit] Successfully setItem in sessionStorage for key: ${storageKey}`
       );
 
-      // Clear input field after storing data, before navigation
       handleInputChange({
         target: { value: "" },
       } as ChangeEvent<HTMLTextAreaElement>);
       router.push(`/chat/${newClientChatId}?newChat=true`);
     } catch (error) {
-      console.error("Error storing new chat data to sessionStorage:", error);
-      setResponseError("Failed to initiate new chat session.");
-      setIsWaitingForResponse(false);
+      console.error(
+        "[ChatInterface handleNewChatSubmit] Error during new chat creation flow:",
+        error
+      );
+      setResponseError(
+        error instanceof Error ? error.message : "Failed to initiate new chat."
+      );
+      setIsAwaitingFirstToken(false); // Reset on error
     }
-    // setIsWaitingForResponse will be reset by the new page load or error handling
+    // setIsAwaitingFirstToken will be reset by the new page load or if an error occurs before navigation
   };
 
   const handleExistingChatSubmit = async (
@@ -557,14 +574,14 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   ) => {
     // This is the original handleSubmit logic, now for existing chats
     e.preventDefault();
-    if (isLoading || isWaitingForResponse) return; // Use isLoading from useChat
+    if (isLoading || isAwaitingFirstToken) return; // Use isLoading from useChat & renamed state
 
     setResponseError(null);
-    setIsWaitingForResponse(true); // Still useful for immediate UI feedback
+    setIsAwaitingFirstToken(true); // Still useful for immediate UI feedback
 
     const currentInputVal = input;
     if (!currentInputVal.trim() && !attachmentFile) {
-      setIsWaitingForResponse(false);
+      setIsAwaitingFirstToken(false);
       return;
     }
 
@@ -630,7 +647,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             ? error.message
             : "Failed to process attachment."
         );
-        setIsWaitingForResponse(false);
+        setIsAwaitingFirstToken(false);
         return;
       }
     }
@@ -726,9 +743,24 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     !isNewChatFlowFromParams || // If not in new chat flow, always show
     (isNewChatFlowFromParams && uiReadyForNewChatSetup); // If in new chat flow, wait for setup
 
+  const handleTitleUpdate = (newTitle: string) => {
+    setChatTitle(newTitle);
+  };
+
   return (
     <div className="flex flex-col h-full" style={dynamicContainerStyle}>
-      <ChatHeader title={chatTitle} />
+      <ChatHeader
+        title={chatTitle}
+        chatId={chatId}
+        onTitleUpdate={handleTitleUpdate}
+        onChatDeleted={() => {
+          // Trigger a manual refresh of the chat list
+          // We can emit a custom event or use a callback mechanism
+          window.dispatchEvent(
+            new CustomEvent("chatDeleted", { detail: { chatId } })
+          );
+        }}
+      />
 
       {showFullUI ? (
         <>
@@ -739,7 +771,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
               initialFetchLoading || (isLoading && messages.length === 0)
             } // Combine loading states
             initialMessagesError={initialMessagesError}
-            isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
+            isAwaitingFirstToken={isAwaitingFirstToken} // Pass renamed state
+            isOverallLoading={isLoading || isAwaitingFirstToken} // Pass combined state for general loading
             responseError={responseError || _chatError?.message || null}
             onExampleQuestionClick={handleExampleQuestionClick}
             selectedModel={selectedModel}
@@ -751,16 +784,27 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             handleFormSubmit={activeFormSubmitHandler} // Use the active handler
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
-            isWaitingForResponse={isLoading || isWaitingForResponse} // Combine loading states
+            isWaitingForResponse={isLoading || isAwaitingFirstToken} // Keep combined state for disabling input
           />
         </>
       ) : (
-        // Show a loader or minimal UI while new chat is being set up
-        // Assuming a LoadingSpinner component exists and can be imported or is globally available
-        <div className="flex-grow flex items-center justify-center">
-          {/* You might need to import LoadingSpinner if not already globally available */}
-          {/* For now, using a simple text placeholder if LoadingSpinner isn't defined: */}
-          <div>Loading chat...</div>
+        <div className="flex-grow flex flex-col items-center justify-center p-4 text-center">
+          {responseError ? (
+            <div className="text-red-500 bg-red-100 p-4 rounded-md">
+              <h3 className="font-semibold text-lg mb-2">
+                Initialization Error
+              </h3>
+              <p>{responseError}</p>
+              <button
+                onClick={() => router.push("/chat/new")}
+                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : (
+            <div>Setting up new chat...</div>
+          )}
         </div>
       )}
     </div>

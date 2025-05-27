@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";
+import TypingIndicator from "./TypingIndicator"; // Import the new component
 import { Message, GeminiModelId } from "@/lib/types"; // Use our Message type, add GeminiModelId
 
 // Define categories and example questions
@@ -58,7 +59,8 @@ interface MessageDisplayAreaProps {
   chatId: string;
   initialFetchLoading: boolean;
   initialMessagesError: string | null;
-  isWaitingForResponse: boolean;
+  isAwaitingFirstToken: boolean; // New prop for typing indicator
+  isOverallLoading: boolean; // New prop for general loading states (like input disable)
   responseError: string | null;
   onExampleQuestionClick: (question: string) => void;
   selectedModel: GeminiModelId; // Add selectedModel prop
@@ -69,7 +71,8 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   chatId,
   initialFetchLoading,
   initialMessagesError,
-  isWaitingForResponse,
+  isAwaitingFirstToken, // Use new prop
+  isOverallLoading, // Use new prop
   responseError,
   onExampleQuestionClick,
   selectedModel, // Destructure selectedModel
@@ -93,7 +96,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
     messages.length === 0 &&
     chatId !== "new";
   const showNewChatInitialState =
-    messages.length === 0 && chatId === "new" && !isWaitingForResponse;
+    messages.length === 0 && chatId === "new" && !isOverallLoading; // Use isOverallLoading here
 
   return (
     <ScrollArea.Root className="flex-1 overflow-hidden">
@@ -181,12 +184,18 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
               {messages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
               ))}
+              {/* Typing Indicator - MOVED INSIDE */}
+              {isAwaitingFirstToken &&
+                messages.length > 0 && ( // Use isAwaitingFirstToken here
+                  <TypingIndicator />
+                )}
             </div>
           )}
 
           {/* Loading Indicator for first message submission */}
-          {isWaitingForResponse &&
+          {isOverallLoading && // Use isOverallLoading for the "Starting chat..."
             chatId === "new" &&
+            messages.length === 0 && // Only if no messages yet (i.e. truly the first submission)
             (() => {
               const isPro = selectedModel === "gemini-2.5-pro-preview-05-06";
               const proStyle = isPro
@@ -210,6 +219,8 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
                 </div>
               );
             })()}
+          {/* Typing Indicator - REMOVED FROM HERE */}
+
           {/* Display unified response errors */}
           {responseError && (
             <div className="flex justify-center w-full my-4">

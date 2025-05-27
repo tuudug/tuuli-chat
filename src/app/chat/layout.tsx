@@ -17,6 +17,28 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
+  // Effect to listen for manual chat deletion events
+  useEffect(() => {
+    const handleChatDeleted = (event: CustomEvent) => {
+      const deletedChatId = event.detail?.chatId;
+      if (deletedChatId) {
+        console.log("Manually removing deleted chat from list:", deletedChatId);
+        setChats((currentChats) =>
+          currentChats.filter((chat) => chat.id !== deletedChatId)
+        );
+      }
+    };
+
+    window.addEventListener("chatDeleted", handleChatDeleted as EventListener);
+
+    return () => {
+      window.removeEventListener(
+        "chatDeleted",
+        handleChatDeleted as EventListener
+      );
+    };
+  }, []);
+
   // Lifted useEffect for fetching chats and realtime subscription
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
@@ -59,24 +81,52 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
             setChats((currentChats) => [payload.new, ...currentChats]);
           };
 
+          // Note: DELETE events are handled manually via custom events
+          // because Supabase DELETE events are not filterable by user_id
+
+          const handleUpdatedChat = (payload: { new: Tables<"chats"> }) => {
+            console.log("Chat updated via realtime in layout:", payload.new);
+            // Update the chat in the list
+            setChats((currentChats) =>
+              currentChats.map((chat) =>
+                chat.id === payload.new.id ? payload.new : chat
+              )
+            );
+          };
+
           channel = supabase
-            .channel("chat-inserts-layout") // Use a unique channel name
+            .channel("chat-changes-layout") // Use a unique channel name
             .on(
-              "postgres_changes",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              "postgres_changes" as any,
               {
                 event: "INSERT",
                 schema: "public",
                 table: "chats",
                 filter: `user_id=eq.${userId}`,
-              },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } as any,
               handleNewChat
+            )
+            // DELETE events are handled manually via custom events
+            .on(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              "postgres_changes" as any,
+              {
+                event: "UPDATE",
+                schema: "public",
+                table: "chats",
+                filter: `user_id=eq.${userId}`,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } as any,
+              handleUpdatedChat
             )
             .subscribe((status, err) => {
               if (err)
                 console.error("Layout Realtime subscription error:", err);
               else console.log("Layout Realtime subscription status:", status);
             });
-          console.log("Layout subscribed to chat inserts for user:", userId);
+          console.log("Layout subscribed to chat changes for user:", userId);
         }
       } catch (error) {
         console.error("Error fetching data or subscribing in layout:", error);
