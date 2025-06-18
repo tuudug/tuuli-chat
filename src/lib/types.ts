@@ -98,6 +98,10 @@ export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-2.0-flash-lite";
 // Type alias for backward compatibility or specific use cases if needed
 export type GeminiModel = GeminiModelId;
 
+export type ResponseLengthSetting = "brief" | "detailed";
+
+export const DEFAULT_RESPONSE_LENGTH_SETTING: ResponseLengthSetting = "brief";
+
 // You can add other shared types here as the application grows
 
 // --- User Profile and Limits ---
