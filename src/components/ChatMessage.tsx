@@ -15,8 +15,7 @@ interface ChatMessageProps {
 export default function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
   const isProModel =
-    message.role === "assistant" &&
-    message.model_used === "gemini-2.5-pro-preview-05-06";
+    message.role === "assistant" && message.model_used === "gemini-2.5-pro";
 
   // Extract attachment data if present (for user messages with images)
   // Prioritize DB fields for URL, then fallback to local data for preview

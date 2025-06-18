@@ -197,7 +197,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
             chatId === "new" &&
             messages.length === 0 && // Only if no messages yet (i.e. truly the first submission)
             (() => {
-              const isPro = selectedModel === "gemini-2.5-pro-preview-05-06";
+              const isPro = selectedModel === "gemini-2.5-pro";
               const proStyle = isPro
                 ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
                 : "";

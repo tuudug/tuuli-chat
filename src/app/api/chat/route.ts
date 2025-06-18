@@ -6,7 +6,7 @@ import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import type { Tables, TablesInsert } from "../../../types/supabase";
-import { LIMITS, type GeminiModelId } from "../../../lib/types";
+import { LIMITS, MODEL_DETAILS, type GeminiModelId } from "../../../lib/types";
 
 export const runtime = "edge";
 
@@ -14,10 +14,14 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY || "",
 });
 
-const systemPrompt: CoreMessage = {
-  role: "system",
-  content:
-    "System Prompt: Keep your responses concise and to the point. Avoid over-explaining unless the user explicitly asks for more detail.",
+const createSystemPrompt = (modelId: GeminiModelId): CoreMessage => {
+  const modelInfo = MODEL_DETAILS.find((model) => model.id === modelId);
+  const modelName = modelInfo?.name || modelId;
+
+  return {
+    role: "system",
+    content: `You are ${modelName}, a powerful AI language model developed by Google. Keep your responses concise and to the point. Avoid over-explaining unless the user explicitly asks for more detail. If users ask about your capabilities or what model you are, you can mention that you are ${modelName}.`,
+  };
 };
 
 interface ChatRequestBody {
@@ -321,7 +325,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: google(modelId as GeminiModelId),
-      messages: [systemPrompt, ...recentMessagesForLlm], // Use the potentially modified messages
+      messages: [createSystemPrompt(modelId), ...recentMessagesForLlm], // Use the potentially modified messages
       async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
         if (finishReason === "stop" || finishReason === "length") {
           await supabaseUserClient.from("messages").insert({
