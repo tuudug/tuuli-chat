@@ -6,7 +6,7 @@ import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import type { Tables, TablesInsert } from "../../../types/supabase";
-import { LIMITS, MODEL_DETAILS, type GeminiModelId } from "../../../lib/types";
+import { LIMITS, MODEL_DETAILS, type GeminiModelId, ResponseLengthSetting, DEFAULT_RESPONSE_LENGTH_SETTING } from "../../../lib/types";
 
 export const runtime = "edge";
 
@@ -14,13 +14,23 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY || "",
 });
 
-const createSystemPrompt = (modelId: GeminiModelId): CoreMessage => {
+const createSystemPrompt = (modelId: GeminiModelId, responseLength: ResponseLengthSetting): CoreMessage => {
   const modelInfo = MODEL_DETAILS.find((model) => model.id === modelId);
   const modelName = modelInfo?.name || modelId;
 
+  let promptContent = `You are ${modelName}, a powerful AI language model developed by Google. The user can change the AI model they are interacting with at any time using the model selector in the chat interface.`;
+
+  if (responseLength === "detailed") {
+    promptContent += " Please provide comprehensive and detailed responses. Elaborate on topics, explain concepts thoroughly, and give extensive examples where appropriate.";
+  } else { // 'brief'
+    promptContent += " Keep your responses concise and to the point. Avoid over-explaining unless the user explicitly asks for more detail.";
+  }
+
+  promptContent += ` If users ask about your capabilities or what model you are, you can mention that you are ${modelName}.`;
+
   return {
     role: "system",
-    content: `You are ${modelName}, a powerful AI language model developed by Google. Keep your responses concise and to the point. Avoid over-explaining unless the user explicitly asks for more detail. If users ask about your capabilities or what model you are, you can mention that you are ${modelName}.`,
+    content: promptContent,
   };
 };
 
@@ -42,6 +52,7 @@ interface ChatRequestBody {
       content?: string;
       name?: string;
     };
+    responseLength?: ResponseLengthSetting;
   };
 }
 
@@ -125,6 +136,7 @@ export async function POST(req: Request) {
 
   const { messages, data } = requestBody;
   const modelId = data?.modelId || "gemini-2.0-flash-lite"; // Default model
+  const responseLength = data?.responseLength || DEFAULT_RESPONSE_LENGTH_SETTING; // Add this line
   const clientProvidedChatId = data?.chatId; // This is the client-generated UID
 
   if (!messages || messages.length === 0) {
@@ -148,23 +160,25 @@ export async function POST(req: Request) {
 
   const isProModel = modelId === LIMITS.PRO_MODEL_ID;
   let limitExceeded = false;
+  const messageCost = responseLength === "detailed" ? 2 : 1; // Define cost
+
   if (userProfile.is_verified) {
     if (
       isProModel &&
-      userProfile.daily_pro_message_count >=
+      (userProfile.daily_pro_message_count + messageCost) > // Check against cost
         LIMITS.VERIFIED.PRO_MESSAGES_PER_DAY
     )
       limitExceeded = true;
   } else {
     if (
       isProModel &&
-      userProfile.daily_pro_message_count >=
+      (userProfile.daily_pro_message_count + messageCost) > // Check against cost
         LIMITS.NON_VERIFIED.PRO_MESSAGES_PER_DAY
     )
       limitExceeded = true;
     else if (
       !isProModel &&
-      userProfile.daily_message_count >=
+      (userProfile.daily_message_count + messageCost) > // Check against cost
         LIMITS.NON_VERIFIED.GENERAL_MESSAGES_PER_DAY
     )
       limitExceeded = true;
@@ -180,9 +194,10 @@ export async function POST(req: Request) {
   const updateCountField = isProModel
     ? "daily_pro_message_count"
     : "daily_message_count";
+  const currentCount = userProfile[updateCountField];
   await supabaseServiceAdmin
     .from("user_profiles")
-    .update({ [updateCountField]: userProfile[updateCountField] + 1 })
+    .update({ [updateCountField]: currentCount + messageCost }) // Use cost here
     .eq("id", user.id);
 
   let dataStreamForResponse: StreamData | undefined; // Renamed to avoid conflict if StreamData is used internally by SDK
@@ -325,7 +340,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: google(modelId as GeminiModelId),
-      messages: [createSystemPrompt(modelId), ...recentMessagesForLlm], // Use the potentially modified messages
+      messages: [createSystemPrompt(modelId, responseLength), ...recentMessagesForLlm], // Use the potentially modified messages
       async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
         if (finishReason === "stop" || finishReason === "length") {
           await supabaseUserClient.from("messages").insert({

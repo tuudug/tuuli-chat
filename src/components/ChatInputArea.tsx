@@ -5,7 +5,12 @@ import {
   PaperclipIcon, // Import PaperclipIcon
   XIcon, // Import XIcon for clearing selected file
 } from "lucide-react";
-import { GeminiModelId, MODEL_DETAILS } from "@/lib/types"; // Use new model types/constants
+import {
+  GeminiModelId,
+  MODEL_DETAILS,
+  ResponseLengthSetting,
+  DEFAULT_RESPONSE_LENGTH_SETTING,
+} from "@/lib/types"; // Use new model types/constants
 import ModelSelector from "./ModelSelector"; // Import the new ModelSelector
 
 interface ChatInputAreaProps {
@@ -15,11 +20,14 @@ interface ChatInputAreaProps {
   ) => void;
   handleFormSubmit: (
     e: React.FormEvent<HTMLFormElement>,
-    attachment?: File | null
-  ) => void; // Modified to accept optional attachment
+    attachment?: File | null,
+    responseLength?: ResponseLengthSetting
+  ) => void; // Modified to accept optional attachment and responseLength
   selectedModel: GeminiModelId; // Use GeminiModelId
   setSelectedModel: (model: GeminiModelId) => void; // Use GeminiModelId
   isWaitingForResponse: boolean;
+  selectedResponseLength: ResponseLengthSetting;
+  setSelectedResponseLength: (length: ResponseLengthSetting) => void;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -29,6 +37,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   selectedModel,
   setSelectedModel,
   isWaitingForResponse,
+  selectedResponseLength,
+  setSelectedResponseLength,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,7 +87,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleFormSubmit(e, selectedFile);
+    handleFormSubmit(e, selectedFile, selectedResponseLength); // Pass selectedResponseLength
     // Clear input and file after submission is handled by the parent
     // setInput(""); // This should be handled by parent if input is controlled there
     if (!isWaitingForResponse) {
@@ -94,6 +104,37 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         onSubmit={onFormSubmit} // Use the new submit handler
         className="p-3 bg-bg-input rounded-xl border border-transparent focus-within:border-btn-primary transition-colors flex flex-col" // Changed flex direction
       >
+        {/* Response Length Selector */}
+        <div className="mt-0 mb-2 flex items-center justify-start gap-2">
+          <span className="text-xs text-text-secondary">Response Length:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedResponseLength("brief")}
+            disabled={isWaitingForResponse}
+            className={`px-2 py-1 text-xs rounded transition-colors ${
+              selectedResponseLength === "brief"
+                ? "bg-btn-primary text-white"
+                : "bg-bg-sidebar hover:bg-bg-sidebar-hover text-text-secondary"
+            }`}
+          >
+            Brief
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedResponseLength("detailed")}
+            disabled={isWaitingForResponse}
+            className={`px-2 py-1 text-xs rounded transition-colors ${
+              selectedResponseLength === "detailed"
+                ? "bg-btn-primary text-white"
+                : "bg-bg-sidebar hover:bg-bg-sidebar-hover text-text-secondary"
+            }`}
+          >
+            Detailed
+          </button>
+          <span className="text-xs text-text-tertiary ml-1">
+            (Detailed costs 2x)
+          </span>
+        </div>
         {/* Model Selector - Moved Above */}
         <div className="mb-2 flex justify-start">
           {" "}
