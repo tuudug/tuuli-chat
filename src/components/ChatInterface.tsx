@@ -6,6 +6,8 @@ import {
   GeminiModelId,
   Message,
   MODEL_DETAILS,
+  ResponseLengthSetting,
+  DEFAULT_RESPONSE_LENGTH_SETTING,
 } from "@/lib/types"; // Use new model types/constants
 import { Message as AIMessage, type Attachment } from "ai"; // Added CoreMessage
 import { useChat } from "ai/react";
@@ -61,6 +63,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   >(null);
   const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
   const [uiReadyForNewChatSetup, setUiReadyForNewChatSetup] = useState(false); // Added state for new chat UI readiness
+  const [selectedResponseLength, setSelectedResponseLength] =
+    useState<ResponseLengthSetting>(DEFAULT_RESPONSE_LENGTH_SETTING);
 
   const { sparksBalance, setSparksBalance } = useSparks();
 
@@ -425,7 +429,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
   const handleNewChatSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null
+    attachmentFile?: File | null,
+    responseLength?: ResponseLengthSetting // Added responseLength
   ) => {
     e.preventDefault();
     if (isAwaitingFirstToken || isLoading) return; // Prevent multiple submissions, check isLoading too
@@ -538,7 +543,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
   const handleExistingChatSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null
+    attachmentFile?: File | null,
+    responseLength?: ResponseLengthSetting // Added responseLength
   ) => {
     // This is the original handleSubmit logic, now for existing chats
     e.preventDefault();
@@ -628,12 +634,14 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       attachment_url?: string;
       attachment_name?: string;
       attachment_type?: string;
+      responseLength?: ResponseLengthSetting; // Added for existing chat
     }
 
     const dataForApi: ExistingChatApiData = {
       modelId: selectedModel,
       chatId: chatId, // Existing chatId
       ...attachmentMetadataForBackend,
+      responseLength: responseLength, // Pass for existing chat
     };
 
     // The userMessageToAppend is implicitly handled by originalHandleSubmit when it takes `e` (the form event)
