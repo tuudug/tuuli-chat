@@ -10,14 +10,15 @@ import {
 import { Message as AIMessage, type Attachment } from "ai"; // Added CoreMessage
 import { useChat } from "ai/react";
 import { useRouter, useSearchParams } from "next/navigation"; // Import useSearchParams
+import { useSparks } from "@/contexts/SparksContext";
 import React, {
   ChangeEvent,
   useCallback,
   useEffect,
   useRef,
   useState,
-} from "react"; // Added useRef
-import { v4 as uuidv4 } from "uuid"; // For generating client-side IDs
+} from "react";
+import { v4 as uuidv4 } from "uuid";
 import ChatHeader from "./ChatHeader";
 import ChatInputArea from "./ChatInputArea";
 import MessageDisplayArea from "./MessageDisplayArea";
@@ -60,6 +61,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   >(null);
   const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
   const [uiReadyForNewChatSetup, setUiReadyForNewChatSetup] = useState(false); // Added state for new chat UI readiness
+
+  const { sparksBalance, setSparksBalance } = useSparks();
 
   const fetchInitialData = useCallback(async () => {
     if (chatId === "new" || !chatId) {
@@ -171,85 +174,50 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     },
   });
 
-  // Effect to process token usage when a message finishes
+  // Effect to process final data from the stream
   useEffect(() => {
-    if (messageIdToProcessTokens && data) {
-      interface TokenUsageUpdateData {
-        type: "token_usage_update";
-        promptTokens?: number;
-        completionTokens?: number;
-        totalTokens?: number;
-      }
-      let tokenDataForCurrentMessage:
-        | {
-            promptTokens?: number;
-            completionTokens?: number;
-            totalTokens?: number;
-          }
-        | undefined = undefined;
+    if (!data || data.length === 0) return;
 
-      const foundDataObject = [...data]
-        .reverse()
-        .find((item: AIMessage["data"]) => {
-          if (
-            typeof item === "object" &&
-            item !== null &&
-            !Array.isArray(item)
-          ) {
-            return (item as { type?: string }).type === "token_usage_update";
-          }
-          return false;
-        });
+    const lastDataObject = data[data.length - 1] as {
+      type?: string;
+      user_message_id?: string;
+      sparks_spent?: number;
+      new_balance?: number;
+    };
 
-      if (foundDataObject) {
-        const tokenUpdate = foundDataObject as unknown as TokenUsageUpdateData;
-        tokenDataForCurrentMessage = {
-          promptTokens: tokenUpdate.promptTokens,
-          completionTokens: tokenUpdate.completionTokens,
-          totalTokens: tokenUpdate.totalTokens,
-        };
+    if (lastDataObject?.type === "final_update") {
+      const { user_message_id, sparks_spent, new_balance } = lastDataObject;
+
+      // Update global sparks balance
+      if (typeof new_balance === "number") {
+        setSparksBalance(new_balance);
       }
 
-      if (tokenDataForCurrentMessage) {
+      // Update the last assistant message with its final cost
+      if (typeof sparks_spent === "number" && sparks_spent > 0) {
         setMessages((currentMessages) => {
-          const typedMessages = currentMessages as unknown as (AIMessage & {
-            model_used?: string;
-            created_at?: string;
-          })[];
-          return typedMessages.map((msg) => {
-            if (
-              msg.id === messageIdToProcessTokens &&
-              msg.role === "assistant"
-            ) {
-              const existingMsgData =
-                typeof msg.data === "object" &&
-                msg.data !== null &&
-                !Array.isArray(msg.data)
-                  ? msg.data
-                  : {};
-              const updatedMsgData = {
-                ...existingMsgData,
-                ...tokenDataForCurrentMessage,
-              };
-              return {
-                ...msg,
-                model_used: selectedModel,
-                created_at:
-                  msg.createdAt?.toISOString() || new Date().toISOString(),
-                data: updatedMsgData,
-              };
-            }
-            return {
-              ...msg,
-              created_at:
-                msg.createdAt?.toISOString() || new Date().toISOString(),
+          const lastAssistantMessageIndex = [...currentMessages]
+            .reverse()
+            .findIndex((m) => m.role === "assistant");
+
+          if (lastAssistantMessageIndex !== -1) {
+            const originalIndex =
+              currentMessages.length - 1 - lastAssistantMessageIndex;
+            const updatedMessages = [...currentMessages];
+            const messageToUpdate = {
+              ...updatedMessages[originalIndex],
+              sparks_cost: sparks_spent,
+              model_used: selectedModel, // Add the model used
+              created_at: new Date().toISOString(), // Add a fresh timestamp
             };
-          }) as unknown as AIMessage[];
+            updatedMessages[originalIndex] = messageToUpdate;
+            return updatedMessages;
+          }
+          return currentMessages;
         });
       }
-      setMessageIdToProcessTokens(null); // Reset after processing
     }
-  }, [messageIdToProcessTokens, data, setMessages, selectedModel]);
+  }, [data, setMessages, setSparksBalance]);
 
   // Effect for fetching initial data for existing chats
   useEffect(() => {
@@ -785,6 +753,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             isWaitingForResponse={isLoading || isAwaitingFirstToken} // Keep combined state for disabling input
+            messages={messages.map((msg) => ({ content: msg.content }))} // Pass message content for sparks calculation
+            userSparks={sparksBalance || 0} // Pass user sparks balance from context
           />
         </>
       ) : (

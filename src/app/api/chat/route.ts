@@ -5,8 +5,9 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import type { Tables, TablesInsert } from "../../../types/supabase";
-import { LIMITS, MODEL_DETAILS, type GeminiModelId } from "../../../lib/types";
+import type { Tables, TablesInsert } from "@/types/supabase";
+import { LIMITS, MODEL_DETAILS, type GeminiModelId } from "@/lib/types";
+import { estimateTokenCount, calculateSparksCost } from "@/lib/sparks";
 
 export const runtime = "edge";
 
@@ -91,6 +92,28 @@ export async function POST(req: Request) {
     userProfile = newProfile;
   }
 
+  // Initialize sparks-related fields if they don't exist (for migration)
+  if (userProfile && typeof userProfile.current_sparks !== "number") {
+    const initialSparks = userProfile.is_verified ? 10000 : 5000;
+    const { data: updatedProfileData, error: updateError } =
+      await supabaseServiceAdmin
+        .from("user_profiles")
+        .update({
+          current_sparks: initialSparks,
+          total_sparks_earned: initialSparks,
+          last_sparks_claim_at: new Date(
+            Date.now() - 24 * 60 * 60 * 1000
+          ).toISOString(), // Allow immediate claim
+        })
+        .eq("id", user.id)
+        .select()
+        .single();
+    if (updateError)
+      console.error("Error initializing sparks:", updateError.message);
+    else if (updatedProfileData) userProfile = updatedProfileData;
+  }
+
+  // Legacy: Still handle daily count resets for backward compatibility
   const currentUtcDateStr = getCurrentUtcDateString();
   if (
     userProfile &&
@@ -146,37 +169,49 @@ export async function POST(req: Request) {
     );
   }
 
-  const isProModel = modelId === LIMITS.PRO_MODEL_ID;
-  let limitExceeded = false;
-  if (userProfile.is_verified) {
-    if (
-      isProModel &&
-      userProfile.daily_pro_message_count >=
-        LIMITS.VERIFIED.PRO_MESSAGES_PER_DAY
-    )
-      limitExceeded = true;
-  } else {
-    if (
-      isProModel &&
-      userProfile.daily_pro_message_count >=
-        LIMITS.NON_VERIFIED.PRO_MESSAGES_PER_DAY
-    )
-      limitExceeded = true;
-    else if (
-      !isProModel &&
-      userProfile.daily_message_count >=
-        LIMITS.NON_VERIFIED.GENERAL_MESSAGES_PER_DAY
-    )
-      limitExceeded = true;
-  }
-
-  if (limitExceeded) {
+  // Server-side check for sparks. We do a rough estimation here to fail fast
+  // if the user is clearly out of sparks, but the final cost is calculated post-generation.
+  const lastUserMessage = messages[messages.length - 1];
+  if (lastUserMessage.role !== "user") {
     return NextResponse.json(
-      { error: "Message limit reached." },
-      { status: 429 }
+      { error: "Last message must be from user" },
+      { status: 400 }
     );
   }
 
+  const userMessageContent =
+    typeof lastUserMessage.content === "string"
+      ? lastUserMessage.content
+      : JSON.stringify(lastUserMessage.content);
+
+  // Rough estimation for pre-check
+  const allConversationContent = messages
+    .map((m) =>
+      typeof m.content === "string" ? m.content : JSON.stringify(m.content)
+    )
+    .join(" ");
+  const estimatedInputTokens = estimateTokenCount(allConversationContent);
+  const estimatedSparksCost = calculateSparksCost(
+    modelId,
+    estimatedInputTokens
+  );
+
+  // Check if user has enough sparks for a rough estimate.
+  // Allow a small buffer; maybe the estimate is high.
+  const currentSparks = userProfile.current_sparks || 0;
+  if (currentSparks < estimatedSparksCost) {
+    return NextResponse.json(
+      {
+        error: "Insufficient sparks",
+        required: estimatedSparksCost,
+        current: currentSparks,
+      },
+      { status: 429 } // 429 Too Many Requests is appropriate for rate limiting/cost limits
+    );
+  }
+
+  // Legacy: Still update message counts for backward compatibility
+  const isProModel = modelId === LIMITS.PRO_MODEL_ID;
   const updateCountField = isProModel
     ? "daily_pro_message_count"
     : "daily_message_count";
@@ -188,19 +223,6 @@ export async function POST(req: Request) {
   let dataStreamForResponse: StreamData | undefined; // Renamed to avoid conflict if StreamData is used internally by SDK
 
   try {
-    const lastUserMessage = messages[messages.length - 1];
-    if (lastUserMessage.role !== "user") {
-      return NextResponse.json(
-        { error: "Last message must be from user" },
-        { status: 400 }
-      );
-    }
-
-    const userMessageContent =
-      typeof lastUserMessage.content === "string"
-        ? lastUserMessage.content
-        : JSON.stringify(lastUserMessage.content); // Keep this for saving to DB
-
     // Create a deep copy of messages for modification to avoid altering the original requestBody.messages
     const messagesForLlm: CoreMessage[] = JSON.parse(JSON.stringify(messages));
 
@@ -272,7 +294,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const recentMessagesForLlm = messagesForLlm.slice(-5); // Prepare messages for LLM
+    // REMOVED: Use all messages instead of limiting to 5
+    const recentMessagesForLlm = messagesForLlm; // Use all conversation history
 
     // Modify the last user message in recentMessagesForLlm if there's an attachment
     if (
@@ -303,53 +326,106 @@ export async function POST(req: Request) {
     }
 
     // Save user message (common for both new and existing chats before LLM call)
-    // IMPORTANT: userMessageContent (the original string) is saved to DB, not the modified array.
+    // The sparks_cost and token counts are now added *after* the response is generated.
     const userMessageToSave: TablesInsert<"messages"> = {
-      chat_id: currentChatId, // This is now always the clientProvidedChatId
+      chat_id: currentChatId,
       user_id: user.id,
       role: "user",
-      content: userMessageContent, // Save the original string content
-      model_used: modelId, // Associate user message with the model chosen for the response
+      content: userMessageContent,
+      model_used: modelId,
       attachment_url: uploadedAttachmentUrl,
       attachment_name: savedAttachmentName,
       attachment_type: savedAttachmentType,
+      // spark cost and token counts are null for now
     };
-    const { error: userMessageSaveError } = await supabaseUserClient
-      .from("messages")
-      .insert(userMessageToSave);
-    if (userMessageSaveError)
+
+    // Insert user message and get the ID for sparks transaction
+    const { data: savedUserMessage, error: userMessageSaveError } =
+      await supabaseUserClient
+        .from("messages")
+        .insert(userMessageToSave)
+        .select("id")
+        .single();
+
+    if (userMessageSaveError || !savedUserMessage) {
       console.error("Error saving user message:", userMessageSaveError.message);
+      return NextResponse.json(
+        { error: "Failed to save message" },
+        { status: 500 }
+      );
+    }
+
+    // The user message is saved, now we can proceed with the LLM call.
+    // Spark deduction will happen in the onFinish callback.
 
     // ALWAYS use streamText now. The distinction for isNewChat returning JSON is removed.
     dataStreamForResponse = new StreamData();
 
     const result = streamText({
       model: google(modelId as GeminiModelId),
-      messages: [createSystemPrompt(modelId), ...recentMessagesForLlm], // Use the potentially modified messages
-      async onFinish({ text, finishReason, usage /*, rawResponse */ }) {
+      messages: [createSystemPrompt(modelId), ...recentMessagesForLlm],
+      async onFinish({ text, finishReason, usage }) {
+        let assistantMessageId: string | null = null;
+
+        // First, save the assistant's message and get its ID
         if (finishReason === "stop" || finishReason === "length") {
-          await supabaseUserClient.from("messages").insert({
-            chat_id: currentChatId, // clientProvidedChatId
-            user_id: user.id,
-            role: "assistant",
-            content: text,
-            model_used: modelId,
-            prompt_tokens: usage?.promptTokens,
-            completion_tokens: usage?.completionTokens,
-            total_tokens: usage?.totalTokens,
-            usage_metadata: usage, // Store the usage object
-          });
+          const { data: assistantMessageData, error: assistantMessageError } =
+            await supabaseUserClient
+              .from("messages")
+              .insert({
+                chat_id: currentChatId,
+                user_id: user.id,
+                role: "assistant",
+                content: text,
+                model_used: modelId,
+              })
+              .select("id")
+              .single();
+
+          if (assistantMessageError) {
+            console.error(
+              "Error saving assistant message:",
+              assistantMessageError
+            );
+          } else {
+            assistantMessageId = assistantMessageData.id;
+          }
         }
-        // Append any final data to the stream if needed by client
+
+        // If we have the assistant message ID, log the cost against it
+        if (assistantMessageId) {
+          const actualInputTokens = usage?.promptTokens || 0;
+          const actualOutputTokens = usage?.completionTokens || 0;
+
+          const { data: transactionResult, error: rpcError } =
+            await supabaseServiceAdmin.rpc(
+              "log_and_spend_sparks_for_assistant_message",
+              {
+                p_user_id: user.id,
+                p_assistant_message_id: assistantMessageId,
+                p_model_id: modelId,
+                p_prompt_tokens: actualInputTokens,
+                p_completion_tokens: actualOutputTokens,
+              }
+            );
+
+          if (rpcError) {
+            console.error("Error logging sparks transaction:", rpcError);
+          }
+
+          // Append final data to the stream for real-time UI updates
+          if (dataStreamForResponse) {
+            dataStreamForResponse.append({
+              type: "final_update",
+              sparks_spent: transactionResult?.sparks_spent || 0,
+              new_balance: transactionResult?.new_balance,
+            });
+          }
+        }
+
+        // Always close the data stream
         if (dataStreamForResponse) {
-          // NEW: Append token usage to the data stream
-          dataStreamForResponse.append({
-            type: "token_usage_update", // A type to identify this data on the client
-            promptTokens: usage?.promptTokens,
-            completionTokens: usage?.completionTokens,
-            totalTokens: usage?.totalTokens,
-          });
-          dataStreamForResponse.close(); // Close after appending
+          dataStreamForResponse.close();
         }
       },
     });

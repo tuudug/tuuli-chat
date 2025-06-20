@@ -5,8 +5,9 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import { UserIcon, BotIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"; // Added ArrowUpIcon and ArrowDownIcon
-import { Message, MODEL_DETAILS } from "@/lib/types"; // Use our Message type and MODEL_DETAILS
+import { UserIcon, BotIcon } from "lucide-react";
+import { Message, MODEL_DETAILS } from "@/lib/types";
+import FinalSparksCost from "./FinalSparksCost";
 
 interface ChatMessageProps {
   message: Message; // Expect our Message type
@@ -52,29 +53,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       })
     : ""; // Display empty or a placeholder if no date is available
 
-  // Derive token counts, preferring direct properties, then message.data
-  // Ensure that the final value is either a number or undefined (to let ?? "N/A" handle it)
-  const rawPromptTokens = message.prompt_tokens ?? message.data?.promptTokens;
-  const promptTokens =
-    typeof rawPromptTokens === "number" ? rawPromptTokens : undefined;
-
-  const rawCompletionTokens =
-    message.completion_tokens ?? message.data?.completionTokens;
-  const completionTokens =
-    typeof rawCompletionTokens === "number" ? rawCompletionTokens : undefined;
-
-  // Log message object for debugging token display
-  if (message.role === "assistant") {
-    console.log("ChatMessage (Assistant):", {
-      id: message.id,
-      contentSnippet: message.content.substring(0, 50),
-      prompt_tokens_direct: message.prompt_tokens,
-      completion_tokens_direct: message.completion_tokens,
-      data_prop: message.data,
-      derived_promptTokens: promptTokens,
-      derived_completionTokens: completionTokens,
-    });
-  }
+  const sparksCost = message.sparks_cost;
 
   // Gradient border style for Pro model messages
   const proBorderStyle = isProModel
@@ -135,7 +114,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           </div>
         </div>
 
-        {/* Metadata: Timestamp and Model Name */}
+        {/* Metadata: Timestamp, Model Name, and Sparks Cost */}
         <div
           className={`flex items-center gap-2 text-xs mt-1 text-text-secondary ${
             isUser ? "group-hover:opacity-100 opacity-0" : "opacity-100" // Keep hover for user
@@ -144,17 +123,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           {modelName && <span className="font-medium">{modelName}</span>}
           {modelName && timestamp && <span>•</span>}
           <span>{timestamp}</span>
-          {(promptTokens != null || completionTokens != null) && (
+          {/* Render the final sparks cost for assistant messages */}
+          {!isUser && sparksCost && sparksCost > 0 && (
             <>
               <span>•</span>
-              <span className="flex items-center">
-                <ArrowUpIcon size={12} className="mr-0.5" />
-                {promptTokens ?? "N/A"}
-              </span>
-              <span className="flex items-center">
-                <ArrowDownIcon size={12} className="mr-0.5" />
-                {completionTokens ?? "N/A"}
-              </span>
+              <FinalSparksCost cost={sparksCost} />
             </>
           )}
         </div>

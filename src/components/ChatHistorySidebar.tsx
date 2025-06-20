@@ -5,35 +5,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-import * as Tooltip from "@radix-ui/react-tooltip";
 import { createClient } from "@/lib/supabase/client";
-import {
-  PlusIcon,
-  MessageSquareIcon,
-  CheckCircle,
-  XCircle,
-  Zap,
-  Star,
-} from "lucide-react";
-import { Tables } from "@/types/supabase";
-import { UserProfile, LIMITS } from "@/lib/types";
+import { PlusIcon, MessageSquareIcon } from "lucide-react";
+import { Tables } from "../types/supabase";
+import { useSparks } from "@/contexts/SparksContext";
+import SparksDisplay from "./SparksDisplay";
 
 // Define props interface
 interface ChatHistorySidebarProps {
   chats: Tables<"chats">[];
   loading: boolean;
-}
-
-// Helper function to format countdown
-function formatCountdown(milliseconds: number): string {
-  if (milliseconds <= 0) {
-    return "Resets now!";
-  }
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours}h ${minutes}m ${seconds}s`;
 }
 
 export default function ChatHistorySidebar({
@@ -44,89 +25,11 @@ export default function ChatHistorySidebar({
   const router = useRouter();
   const currentChatId = params?.chatId as string | undefined;
 
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [countdown, setCountdown] = useState<string>("");
-  const [_tooltipText, setTooltipText] = useState<string>("");
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      setProfileLoading(true);
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data, error } = await supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-        if (error && error.code !== "PGRST116") {
-          // PGRST116: single row not found
-          console.error("Error fetching user profile:", error);
-        } else if (data) {
-          setUserProfile(data as UserProfile);
-        } else if (user) {
-          // Added 'if (user)' to ensure user object exists for default profile
-          // Profile not found for an authenticated user, set a default non-verified profile
-          console.warn(
-            "User profile not found on client-side for user:",
-            user.id,
-            "Setting default non-verified profile."
-          );
-          const defaultFallbackProfile: UserProfile = {
-            id: user.id,
-            is_verified: false,
-            daily_message_count: 0,
-            daily_pro_message_count: 0,
-            // Use a recent timestamp, or fetch server time if critical,
-            // but for display, client's now is okay for a fallback.
-            last_message_reset_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          setUserProfile(defaultFallbackProfile);
-        } else {
-          // User is not available, so profile cannot be determined or defaulted
-          console.log(
-            "No user session found, cannot fetch or default profile."
-          );
-        }
-      }
-      setProfileLoading(false);
-    };
-    fetchProfile();
-  }, []);
-
-  useEffect(() => {
-    if (!userProfile) {
-      setTooltipText("Loading profile...");
-      return;
-    }
-
-    // Interval to update countdown
-    const intervalId = setInterval(() => {
-      const now = new Date();
-      const nextReset = new Date(now);
-      nextReset.setUTCHours(24, 0, 0, 0); // Next 00:00 UTC
-
-      const diff = nextReset.getTime() - now.getTime();
-      const currentCountdown = formatCountdown(diff);
-      setCountdown(currentCountdown);
-    }, 1000);
-
-    // Initial calculation
-    const now = new Date();
-    const nextReset = new Date(now);
-    nextReset.setUTCHours(24, 0, 0, 0);
-    const diff = nextReset.getTime() - now.getTime();
-    const initialCountdown = formatCountdown(diff);
-    setCountdown(initialCountdown);
-
-    return () => clearInterval(intervalId);
-  }, [userProfile]);
+  const {
+    userProfile,
+    setSparksBalance,
+    isLoading: profileLoading,
+  } = useSparks();
 
   if (initialLoading || profileLoading) {
     return (
@@ -137,111 +40,25 @@ export default function ChatHistorySidebar({
   }
 
   return (
-    <div className="relative h-full flex flex-col bg-bg-sidebar text-text-primary space-y-3 overflow-hidden">
-      <div className="flex flex-col items-center pt-6 px-3">
-        <Image
-          src="/logo.png"
-          alt="Logo"
-          width={0}
-          height={0}
-          sizes="100vw"
-          className="w-auto h-10 max-w-[150px]"
-          priority
-        />
-        {userProfile && (
-          <Tooltip.Provider delayDuration={300}>
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <div
-                  className={`mt-2 flex items-center space-x-1.5 text-xs rounded-full font-medium cursor-default
-                    ${
-                      userProfile.is_verified
-                        ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-[1px]"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 px-2.5 py-1"
-                    }`}
-                >
-                  {userProfile.is_verified ? (
-                    <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-bg-sidebar rounded-full">
-                      <CheckCircle size={14} className="text-green-500" />
-                      <span className="text-white">Verified</span>
-                    </div>
-                  ) : (
-                    <>
-                      <XCircle size={14} className="text-gray-600" />
-                      <span>Not Verified</span>
-                    </>
-                  )}
-                </div>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-gray-800 rounded-lg px-0 py-0 shadow-lg z-50 max-w-xs overflow-hidden"
-                  sideOffset={5}
-                >
-                  <div className="flex flex-col text-xs">
-                    {/* Header */}
-                    <div className="bg-gray-700 px-4 py-2 font-medium text-white">
-                      Daily Limits
-                    </div>
-
-                    {/* Pro Model */}
-                    <div className="border-b border-gray-700 px-4 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Zap size={14} className="text-yellow-400" />
-                        <span className="text-yellow-300 font-medium">
-                          2.5 Pro
-                        </span>
-                      </div>
-                      <div className="text-white">
-                        {userProfile.daily_pro_message_count}/
-                        {userProfile.is_verified ? (
-                          <span>
-                            {LIMITS.VERIFIED.PRO_MESSAGES_PER_DAY}{" "}
-                            <span className="text-gray-400 line-through text-xs ml-1.5">
-                              {LIMITS.NON_VERIFIED.PRO_MESSAGES_PER_DAY}
-                            </span>
-                          </span>
-                        ) : (
-                          LIMITS.NON_VERIFIED.PRO_MESSAGES_PER_DAY
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Other Models */}
-                    <div className="border-b border-gray-700 px-4 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Star size={14} className="text-blue-400" />
-                        <span className="text-blue-300 font-medium">
-                          Others
-                        </span>
-                      </div>
-                      <div className="text-white">
-                        {userProfile.daily_message_count}/
-                        {userProfile.is_verified ? (
-                          <span>
-                            ∞{" "}
-                            <span className="text-gray-400 line-through text-xs ml-1.5">
-                              {LIMITS.NON_VERIFIED.GENERAL_MESSAGES_PER_DAY}
-                            </span>
-                          </span>
-                        ) : (
-                          LIMITS.NON_VERIFIED.GENERAL_MESSAGES_PER_DAY
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Reset Time */}
-                    <div className="px-4 py-2 text-gray-300 bg-gray-800 flex items-center justify-between">
-                      <span>Resets in:</span>
-                      <span className="font-mono">{countdown}</span>
-                    </div>
-                  </div>
-                  <Tooltip.Arrow className="fill-gray-700" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        )}
+    <div className="relative h-full flex flex-col bg-bg-sidebar text-text-primary space-y-4 overflow-hidden">
+      <div className="pt-6 px-3">
+        <div className="flex items-center justify-between">
+          <Image
+            src="/logo.png"
+            alt="Logo"
+            width={0}
+            height={0}
+            sizes="100vw"
+            className="w-auto h-10 max-w-[120px]"
+            priority
+          />
+          <div className="flex-shrink-0 min-w-0 ml-2">
+            <SparksDisplay
+              userProfile={userProfile}
+              onSparksUpdate={setSparksBalance}
+            />
+          </div>
+        </div>
       </div>
       <div className="px-3">
         <Link

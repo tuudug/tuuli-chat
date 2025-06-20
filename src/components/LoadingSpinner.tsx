@@ -3,7 +3,7 @@ import React from "react";
 const LoadingSpinner: React.FC = () => {
   return (
     <svg
-      className="animate-spin h-8 w-8 text-text-primary mb-4"
+      className="animate-spin h-8 w-8 text-gray-300 mb-4"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"

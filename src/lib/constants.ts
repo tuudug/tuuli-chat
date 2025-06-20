@@ -29,6 +29,28 @@ export const MODEL_PRICES: Record<
 };
 
 // Updated to use the new Pro model ID
+// Model multipliers for sparks cost transparency
+// Based on gemini-2.5-flash as baseline (1.0x) with nice round progression
+export const MODEL_MULTIPLIERS: Record<GeminiModelId, number> = {
+  // Gemini 2.0 Models (economy tier)
+  "gemini-2.0-flash-lite": 0.1, // Most economical option
+  "gemini-2.0-flash": 0.2, // Budget option
+
+  // Gemini 2.5 Models
+  "gemini-2.5-flash-lite-preview-06-17": 0.2, // Same tier as 2.0-flash
+  "gemini-2.5-flash": 1.0, // Baseline - balanced performance/cost
+  "gemini-2.5-pro": 4.0, // Premium tier - highest capability
+};
+
+// Model display names for UI
+export const MODEL_DISPLAY_NAMES: Record<GeminiModelId, string> = {
+  "gemini-2.5-pro": "Pro",
+  "gemini-2.5-flash": "Flash",
+  "gemini-2.5-flash-lite-preview-06-17": "Flash Lite",
+  "gemini-2.0-flash": "Flash",
+  "gemini-2.0-flash-lite": "Flash Lite",
+};
+
 export const PRO_MODEL_ID: GeminiModelId = "gemini-2.5-pro";
 
 export const DATE_RANGE_OPTIONS = [

@@ -11,6 +11,9 @@ export type Message = {
   attachment_type?: string | null; // From DB
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
+  sparks_cost?: number | null; // Add sparks cost field
+  estimated_input_tokens?: number | null;
+  estimated_output_tokens?: number | null;
   data?: {
     ui_model_used?: string;
     ui_created_at?: string;
@@ -110,6 +113,11 @@ export type UserProfile = {
   last_message_reset_at: string; // TIMESTAMPTZ as string
   created_at: string;
   updated_at: string;
+  // Sparks-related fields to match Supabase schema
+  current_sparks: number | null;
+  last_sparks_claim_at: string | null;
+  total_sparks_earned: number | null;
+  total_sparks_spent: number | null;
 };
 
 export const LIMITS = {
@@ -122,4 +130,35 @@ export const LIMITS = {
     PRO_MESSAGES_PER_DAY: 500,
   },
   PRO_MODEL_ID: "gemini-2.5-pro" as GeminiModelId,
+};
+
+// Sparks system constants
+export const SPARKS = {
+  DAILY_CLAIM: {
+    NON_VERIFIED: 5000,
+    VERIFIED: 10000,
+  },
+  // Minimum cost per message
+  MIN_COST: 1,
+} as const;
+
+// Sparks-related types
+export type SparkTransaction = {
+  id: string;
+  user_id: string;
+  transaction_type: "daily_claim" | "message_cost" | "admin_adjustment";
+  amount: number;
+  balance_after: number;
+  message_id?: string;
+  model_used?: string;
+  estimated_tokens?: number;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+};
+
+export type SparkBalance = {
+  current_sparks: number;
+  can_claim_today: boolean;
+  is_verified: boolean;
+  last_claim_at: string;
 };
