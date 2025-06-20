@@ -18,13 +18,7 @@ import { formatSparks } from "@/lib/sparks";
 import { SparkBalance } from "@/lib/types"; // UserProfile removed as it comes from context
 import { useSparks } from "@/contexts/SparksContext";
 
-interface SparksDisplayProps {
-  // userProfile: UserProfile | null; // Removed, will use contextUserProfile
-  // onSparksUpdate?: (newBalance: number) => void; // This might also be removed if context handles all updates
-}
-
-export default function SparksDisplay({
-}: SparksDisplayProps) { // onSparksUpdate removed from props
+export default function SparksDisplay() { // Removed SparksDisplayProps
   const {
     sparksBalance: contextSparksBalance,
     isLoading: contextIsLoading,
