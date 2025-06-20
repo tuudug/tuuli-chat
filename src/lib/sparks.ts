@@ -1,4 +1,4 @@
-import { MODEL_PRICES, MODEL_MULTIPLIERS } from "./constants";
+import { MODEL_MULTIPLIERS } from "./constants";
 import type { GeminiModelId } from "./types";
 
 /**

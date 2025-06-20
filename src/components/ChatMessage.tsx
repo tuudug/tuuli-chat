@@ -1,6 +1,7 @@
 "use client"; // Needs client-side libraries for rendering
 
 import React from "react";
+import Image from "next/image"; // Import next/image
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -91,11 +92,14 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             {isUser ? (
               <div className="text-sm">
                 {isImageAttachment && displayableImageSrc && (
-                  <div className="mb-2">
-                    <img
+                  <div className="mb-2 relative" style={{ width: 'auto', height: 'auto', maxWidth: '20rem', maxHeight: '16rem' }}> {/* Adjust wrapper for layout */}
+                    <Image
                       src={displayableImageSrc}
                       alt={imageName || "Uploaded image"}
-                      className="max-w-xs max-h-64 rounded-md object-contain"
+                      width={320} // max-w-xs is 20rem = 320px
+                      height={256} // max-h-64 is 16rem = 256px
+                      className="rounded-md" // Removed object-contain, as it's a prop
+                      style={{ objectFit: "contain" }} // Use style for object-fit
                     />
                   </div>
                 )}

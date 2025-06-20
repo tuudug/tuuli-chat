@@ -58,13 +58,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   >(null);
   const [isAwaitingFirstToken, setIsAwaitingFirstToken] = useState(false); // Renamed state
   const [responseError, setResponseError] = useState<string | null>(null);
-  const [messageIdToProcessTokens, setMessageIdToProcessTokens] = useState<
-    string | null
-  >(null);
   const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
   const [uiReadyForNewChatSetup, setUiReadyForNewChatSetup] = useState(false); // Added state for new chat UI readiness
-  const [selectedResponseLength, setSelectedResponseLength] =
-    useState<ResponseLengthSetting>(DEFAULT_RESPONSE_LENGTH_SETTING);
 
   const { sparksBalance, setSparksBalance } = useSparks();
 
@@ -184,13 +179,12 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
     const lastDataObject = data[data.length - 1] as {
       type?: string;
-      user_message_id?: string;
       sparks_spent?: number;
       new_balance?: number;
     };
 
     if (lastDataObject?.type === "final_update") {
-      const { user_message_id, sparks_spent, new_balance } = lastDataObject;
+      const { sparks_spent, new_balance } = lastDataObject;
 
       // Update global sparks balance
       if (typeof new_balance === "number") {
@@ -221,7 +215,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         });
       }
     }
-  }, [data, setMessages, setSparksBalance]);
+  }, [data, setMessages, setSparksBalance, selectedModel]);
 
   // Effect for fetching initial data for existing chats
   useEffect(() => {
@@ -429,8 +423,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
   const handleNewChatSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null,
-    responseLength?: ResponseLengthSetting // Added responseLength
+    attachmentFile?: File | null
   ) => {
     e.preventDefault();
     if (isAwaitingFirstToken || isLoading) return; // Prevent multiple submissions, check isLoading too
@@ -543,8 +536,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
   const handleExistingChatSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null,
-    responseLength?: ResponseLengthSetting // Added responseLength
+    attachmentFile?: File | null
   ) => {
     // This is the original handleSubmit logic, now for existing chats
     e.preventDefault();
@@ -634,14 +626,12 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       attachment_url?: string;
       attachment_name?: string;
       attachment_type?: string;
-      responseLength?: ResponseLengthSetting; // Added for existing chat
     }
 
     const dataForApi: ExistingChatApiData = {
       modelId: selectedModel,
       chatId: chatId, // Existing chatId
       ...attachmentMetadataForBackend,
-      responseLength: responseLength, // Pass for existing chat
     };
 
     // The userMessageToAppend is implicitly handled by originalHandleSubmit when it takes `e` (the form event)

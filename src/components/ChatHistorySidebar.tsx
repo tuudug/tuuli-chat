@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
@@ -26,8 +26,6 @@ export default function ChatHistorySidebar({
   const currentChatId = params?.chatId as string | undefined;
 
   const {
-    userProfile,
-    setSparksBalance,
     isLoading: profileLoading,
   } = useSparks();
 
