@@ -53,10 +53,7 @@ export default function ChatHistorySidebar({
             priority
           />
           <div className="flex-shrink-0 min-w-0 ml-2">
-            <SparksDisplay
-              userProfile={userProfile}
-              onSparksUpdate={setSparksBalance}
-            />
+            <SparksDisplay />
           </div>
         </div>
       </div>
