@@ -169,6 +169,35 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
             transform: translateY(0);
           }
         }
+
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(
+            156,
+            163,
+            175,
+            0.3
+          ); /* gray-400 with opacity */
+          border-radius: 10px;
+          border: 2px solid transparent;
+          background-clip: content-box;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(
+            156,
+            163,
+            175,
+            0.5
+          ); /* gray-400 with more opacity on hover */
+        }
       `}</style>
       <div className="relative">
         {/* Trigger Button */}
@@ -222,7 +251,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
               }}
             >
               <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl shadow-lg">
-                <div className="p-4">
+                <div className="p-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                   {/* Model Selector Title */}
                   <h3 className="text-sm font-semibold text-white mb-4 text-center">
                     Model Selection

@@ -162,7 +162,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     },
     onFinish: (finishedMessage) => {
       if (finishedMessage.role === "assistant") {
-        setMessageIdToProcessTokens(finishedMessage.id);
       }
       // isLoading from useChat will become false automatically by the SDK
     },

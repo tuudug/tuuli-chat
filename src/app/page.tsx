@@ -42,8 +42,8 @@ export default function LoginPage() {
   // Removed useEffect hook for onAuthStateChange
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md text-center">
+    <div className="flex items-center justify-center min-h-screen bg-gray-900">
+      <div className="p-8 bg-gray-800 rounded-lg shadow-md text-center text-white">
         <Image
           src="/logo.png"
           alt="AI Chat Logo"
@@ -55,7 +55,7 @@ export default function LoginPage() {
         <Slot>
           <button
             onClick={handleGoogleLogin}
-            className="inline-flex items-center justify-center rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+            className="inline-flex items-center justify-center rounded-md bg-blue-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
           >
             <svg
               viewBox="0 0 24 24"

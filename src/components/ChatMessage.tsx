@@ -62,87 +62,109 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     : "";
 
   return (
-    <div
-      className={`group flex items-start gap-3 ${
-        isUser ? "justify-end" : "justify-start"
-      }`}
-    >
-      {/* Assistant Avatar */}
-      {!isUser && (
-        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-bg-input flex-shrink-0">
-          <BotIcon size={16} className="text-text-secondary" />
-        </div>
-      )}
-
-      {/* Message Bubble and Metadata */}
+    <>
+      <style jsx>{`
+        .prose strong {
+          color: white !important; /* Force white bold text for dark mode app */
+          font-weight: 600;
+        }
+        .prose b {
+          color: white !important; /* Force white bold text for dark mode app */
+          font-weight: 600;
+        }
+      `}</style>
       <div
-        className={`flex flex-col max-w-[75%] ${
-          isUser ? "items-end" : "items-start"
+        className={`group flex items-start gap-3 ${
+          isUser ? "justify-end" : "justify-start"
         }`}
       >
-        {/* Optional Gradient Border Wrapper for Pro Model */}
-        <div className={proBorderStyle}>
+        {/* Assistant Avatar */}
+        {!isUser && (
+          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-bg-input flex-shrink-0">
+            <BotIcon size={16} className="text-text-secondary" />
+          </div>
+        )}
+
+        {/* Message Bubble and Metadata */}
+        <div
+          className={`flex flex-col max-w-[75%] ${
+            isUser ? "items-end" : "items-start"
+          }`}
+        >
+          {/* Optional Gradient Border Wrapper for Pro Model */}
+          <div className={proBorderStyle}>
+            <div
+              className={`p-3 rounded-lg ${
+                isUser
+                  ? "bg-btn-primary text-text-primary rounded" // User style
+                  : "bg-bg-input text-text-primary rounded" // Assistant style
+              } ${isProModel ? "rounded-[7px]" : ""}`} // Slightly smaller radius inside border
+            >
+              {isUser ? (
+                <div className="text-sm">
+                  {isImageAttachment && displayableImageSrc && (
+                    <div
+                      className="mb-2 relative"
+                      style={{
+                        width: "auto",
+                        height: "auto",
+                        maxWidth: "20rem",
+                        maxHeight: "16rem",
+                      }}
+                    >
+                      {" "}
+                      {/* Adjust wrapper for layout */}
+                      <Image
+                        src={displayableImageSrc}
+                        alt={imageName || "Uploaded image"}
+                        width={320} // max-w-xs is 20rem = 320px
+                        height={256} // max-h-64 is 16rem = 256px
+                        className="rounded-md" // Removed object-contain, as it's a prop
+                        style={{ objectFit: "contain" }} // Use style for object-fit
+                      />
+                    </div>
+                  )}
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+                </div>
+              ) : (
+                <div className="prose prose-sm prose-invert max-w-none text-white">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Metadata: Timestamp, Model Name, and Sparks Cost */}
           <div
-            className={`p-3 rounded-lg ${
-              isUser
-                ? "bg-btn-primary text-text-primary rounded" // User style
-                : "bg-bg-input text-text-primary rounded" // Assistant style
-            } ${isProModel ? "rounded-[7px]" : ""}`} // Slightly smaller radius inside border
+            className={`flex items-center gap-2 text-xs mt-1 text-text-secondary ${
+              isUser ? "group-hover:opacity-100 opacity-0" : "opacity-100" // Keep hover for user
+            } transition-opacity`}
           >
-            {isUser ? (
-              <div className="text-sm">
-                {isImageAttachment && displayableImageSrc && (
-                  <div className="mb-2 relative" style={{ width: 'auto', height: 'auto', maxWidth: '20rem', maxHeight: '16rem' }}> {/* Adjust wrapper for layout */}
-                    <Image
-                      src={displayableImageSrc}
-                      alt={imageName || "Uploaded image"}
-                      width={320} // max-w-xs is 20rem = 320px
-                      height={256} // max-h-64 is 16rem = 256px
-                      className="rounded-md" // Removed object-contain, as it's a prop
-                      style={{ objectFit: "contain" }} // Use style for object-fit
-                    />
-                  </div>
-                )}
-                <p className="whitespace-pre-wrap">{message.content}</p>
-              </div>
-            ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-white">
-                <ReactMarkdown
-                  remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {message.content}
-                </ReactMarkdown>
-              </div>
+            {modelName && <span className="font-medium">{modelName}</span>}
+            {modelName && timestamp && <span>•</span>}
+            <span>{timestamp}</span>
+            {/* Render the final sparks cost for assistant messages */}
+            {!isUser && sparksCost && sparksCost > 0 && (
+              <>
+                <span>•</span>
+                <FinalSparksCost cost={sparksCost} />
+              </>
             )}
           </div>
         </div>
 
-        {/* Metadata: Timestamp, Model Name, and Sparks Cost */}
-        <div
-          className={`flex items-center gap-2 text-xs mt-1 text-text-secondary ${
-            isUser ? "group-hover:opacity-100 opacity-0" : "opacity-100" // Keep hover for user
-          } transition-opacity`}
-        >
-          {modelName && <span className="font-medium">{modelName}</span>}
-          {modelName && timestamp && <span>•</span>}
-          <span>{timestamp}</span>
-          {/* Render the final sparks cost for assistant messages */}
-          {!isUser && sparksCost && sparksCost > 0 && (
-            <>
-              <span>•</span>
-              <FinalSparksCost cost={sparksCost} />
-            </>
-          )}
-        </div>
+        {/* User Avatar */}
+        {isUser && (
+          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-bg-input flex-shrink-0">
+            <UserIcon size={16} className="text-text-secondary" />
+          </div>
+        )}
       </div>
-
-      {/* User Avatar */}
-      {isUser && (
-        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-bg-input flex-shrink-0">
-          <UserIcon size={16} className="text-text-secondary" />
-        </div>
-      )}
-    </div>
+    </>
   );
 }
