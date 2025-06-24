@@ -9,6 +9,7 @@ export type Message = {
   attachment_url?: string | null; // From DB
   attachment_name?: string | null; // From DB
   attachment_type?: string | null; // From DB
+  attachment_preview?: string | null; // For local base64 preview before upload
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
   sparks_cost?: number | null; // Add sparks cost field
@@ -17,12 +18,6 @@ export type Message = {
   data?: {
     ui_model_used?: string;
     ui_created_at?: string;
-    attachment?: {
-      // For local preview of base64 before it's uploaded and has a URL
-      type: string;
-      content: string; // Base64 string
-      name: string;
-    };
     [key: string]: unknown; // Use unknown instead of any for stricter typing
   };
 };

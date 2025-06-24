@@ -1,6 +1,5 @@
 // Ensure correct imports from 'ai' and provider
-import { streamText, type CoreMessage, StreamData } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { GoogleGenAI, type Content, type Part } from "@google/genai";
 // Import both client creation functions
 import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -16,14 +15,14 @@ import { estimateTokenCount, calculateSparksCost } from "@/lib/sparks";
 
 export const runtime = "edge";
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GEMINI_API_KEY || "",
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
 });
 
 const createSystemPrompt = (
   modelId: GeminiModelId,
   responseLength: ResponseLengthSetting
-): CoreMessage => {
+): Content => {
   const modelInfo = MODEL_DETAILS.find((model) => model.id === modelId);
   const modelName = modelInfo?.name || modelId;
 
@@ -42,28 +41,24 @@ const createSystemPrompt = (
 
   return {
     role: "system",
-    content: promptContent,
+    parts: [{ text: promptContent }],
   };
 };
 
 interface ChatRequestBody {
-  messages: CoreMessage[];
+  messages: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    created_at: string;
+  }[];
   data?: {
     modelId?: GeminiModelId;
     chatId?: string;
-    attachment?: {
-      type: string;
-      content: string;
-      name: string;
-    };
-    attachment_url?: string;
-    attachment_name?: string;
-    attachment_type?: string;
-    local_attachment_preview?: {
-      type?: string;
-      content?: string;
-      name?: string;
-    };
+    attachment_url?: string; // The public URL from Supabase
+    attachment_content?: string; // The base64 content for the LLM
+    attachment_name?: string; // The original file name
+    attachment_type?: string; // The file's MIME type
     responseLength?: ResponseLengthSetting;
   };
 }
@@ -202,17 +197,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const userMessageContent =
-    typeof lastUserMessage.content === "string"
-      ? lastUserMessage.content
-      : JSON.stringify(lastUserMessage.content);
+  const userMessageContent = lastUserMessage.content || "";
 
   // Rough estimation for pre-check
-  const allConversationContent = messages
-    .map((m) =>
-      typeof m.content === "string" ? m.content : JSON.stringify(m.content)
-    )
-    .join(" ");
+  const allConversationContent = messages.map((m) => m.content).join(" ");
   const estimatedInputTokens = estimateTokenCount(allConversationContent);
   const estimatedSparksCost = calculateSparksCost(
     modelId,
@@ -244,18 +232,21 @@ export async function POST(req: Request) {
     .update({ [updateCountField]: currentCount + 1 }) // Increment by 1 message
     .eq("id", user.id);
 
-  let dataStreamForResponse: StreamData | undefined; // Renamed to avoid conflict if StreamData is used internally by SDK
-
   try {
     // Create a deep copy of messages for modification to avoid altering the original requestBody.messages
-    const messagesForLlm: CoreMessage[] = JSON.parse(JSON.stringify(messages));
+    // Create a deep copy of messages for modification and transform to the format expected by the LLM
+    const messagesForLlm: Content[] = JSON.parse(JSON.stringify(messages)).map(
+      (msg: { role: "user" | "assistant"; content: string }) => ({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }],
+      })
+    );
 
-    const uploadedAttachmentUrl =
-      (data?.attachment_url as string | null) || null;
-    const savedAttachmentName =
-      (data?.attachment_name as string | null) || null;
-    const savedAttachmentType =
-      (data?.attachment_type as string | null) || null;
+    // Extract all attachment-related data from the request
+    const attachmentContent = data?.attachment_content || null;
+    const attachmentUrl = data?.attachment_url || null;
+    const savedAttachmentName = data?.attachment_name || null;
+    const savedAttachmentType = data?.attachment_type || null;
 
     // Use clientProvidedChatId consistently
     const currentChatId = clientProvidedChatId;
@@ -323,27 +314,27 @@ export async function POST(req: Request) {
 
     // Modify the last user message in recentMessagesForLlm if there's an attachment
     if (
-      uploadedAttachmentUrl &&
+      attachmentContent &&
       savedAttachmentType &&
       recentMessagesForLlm.length > 0
     ) {
       const lastLlmUserMessage =
         recentMessagesForLlm[recentMessagesForLlm.length - 1];
       if (lastLlmUserMessage.role === "user") {
-        const originalTextContent =
-          typeof lastLlmUserMessage.content === "string"
-            ? lastLlmUserMessage.content
-            : (Array.isArray(lastLlmUserMessage.content) &&
-                lastLlmUserMessage.content.find((p) => p.type === "text")
-                  ?.text) ||
-              "";
+        const originalTextContent = (lastLlmUserMessage.parts || [])
+          .map((p: Part) => ("text" in p ? p.text : ""))
+          .join("");
 
-        lastLlmUserMessage.content = [
-          { type: "text", text: originalTextContent },
+        // Remove the "data:image/jpeg;base64," prefix
+        const base64Data = attachmentContent.split(",")[1];
+
+        lastLlmUserMessage.parts = [
+          { text: originalTextContent },
           {
-            type: "image", // AI SDK uses 'image' part type for data to be fetched (URL)
-            image: new URL(uploadedAttachmentUrl),
-            mimeType: savedAttachmentType,
+            inlineData: {
+              data: base64Data,
+              mimeType: savedAttachmentType,
+            },
           },
         ];
       }
@@ -357,7 +348,7 @@ export async function POST(req: Request) {
       role: "user",
       content: userMessageContent,
       model_used: modelId,
-      attachment_url: uploadedAttachmentUrl,
+      attachment_url: attachmentUrl, // Save the public URL from Supabase
       attachment_name: savedAttachmentName,
       attachment_type: savedAttachmentType,
       // spark cost and token counts are null for now
@@ -382,102 +373,115 @@ export async function POST(req: Request) {
     // The user message is saved, now we can proceed with the LLM call.
     // Spark deduction will happen in the onFinish callback.
 
-    // ALWAYS use streamText now. The distinction for isNewChat returning JSON is removed.
-    dataStreamForResponse = new StreamData();
+    const systemPromptObject = createSystemPrompt(modelId, responseLength);
+    // Safely extract the text from the system prompt
+    const firstPart = systemPromptObject.parts?.[0];
+    const systemPromptText =
+      firstPart && "text" in firstPart ? firstPart.text : "";
 
-    const result = streamText({
-      model: google(modelId as GeminiModelId),
-      messages: [
-        createSystemPrompt(modelId, responseLength),
-        ...recentMessagesForLlm,
-      ],
-      async onFinish({ text, finishReason, usage }) {
-        let assistantMessageId: string | null = null;
+    const contentsForLlm = [
+      { role: "user" as const, parts: [{ text: systemPromptText }] },
+      {
+        role: "model" as const,
+        parts: [{ text: "Okay, I will follow these instructions." }],
+      },
+      ...recentMessagesForLlm,
+    ];
 
-        // First, save the assistant's message and get its ID
-        if (finishReason === "stop" || finishReason === "length") {
-          const { data: assistantMessageData, error: assistantMessageError } =
-            await supabaseUserClient
-              .from("messages")
-              .insert({
-                chat_id: currentChatId,
-                user_id: user.id,
-                role: "assistant",
-                content: text,
-                model_used: modelId,
-              })
-              .select("id")
-              .single();
+    const result = await genAI.models.generateContentStream({
+      model: modelId,
+      contents: contentsForLlm,
+    });
 
-          if (assistantMessageError) {
-            console.error(
-              "Error saving assistant message:",
-              assistantMessageError
-            );
-          } else {
-            assistantMessageId = assistantMessageData.id;
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let accumulatedResponse = "";
+        // The 'result' is an async iterator of response chunks
+        for await (const chunk of result) {
+          const text = chunk.text;
+          if (typeof text === "string") {
+            accumulatedResponse += text;
+            controller.enqueue(encoder.encode(text));
           }
         }
 
-        // If we have the assistant message ID, log the cost against it
-        if (assistantMessageId) {
-          const actualInputTokens = usage?.promptTokens || 0;
-          const actualOutputTokens = usage?.completionTokens || 0;
+        // After the stream is finished, save the assistant message and handle sparks
+        const completionTokens = estimateTokenCount(accumulatedResponse);
 
-          const { data: transactionResult, error: rpcError } =
+        // First, insert a placeholder for the assistant message to get an ID
+        const { data: assistantMessageShell, error: shellError } =
+          await supabaseServiceAdmin
+            .from("messages")
+            .insert({
+              chat_id: currentChatId,
+              user_id: user.id,
+              role: "assistant",
+              content: accumulatedResponse, // Save the full content
+              model_used: modelId,
+            })
+            .select("id")
+            .single();
+
+        if (shellError || !assistantMessageShell) {
+          console.error(
+            "Failed to insert assistant message shell:",
+            shellError?.message
+          );
+          // The stream is already sent, so we can't return an error response.
+          // The message will be visible on the client but won't have a cost.
+        } else {
+          // Now, call the new function to log costs and spend sparks
+          const { data: sparksResult, error: sparksError } =
             await supabaseServiceAdmin.rpc(
               "log_and_spend_sparks_for_assistant_message",
               {
                 p_user_id: user.id,
-                p_assistant_message_id: assistantMessageId,
+                p_assistant_message_id: assistantMessageShell.id,
                 p_model_id: modelId,
-                p_prompt_tokens: actualInputTokens,
-                p_completion_tokens: actualOutputTokens,
+                p_prompt_tokens: estimatedInputTokens,
+                p_completion_tokens: completionTokens,
               }
             );
 
-          if (rpcError) {
-            console.error("Error logging sparks transaction:", rpcError);
-          }
-
-          // Append final data to the stream for real-time UI updates
-          if (dataStreamForResponse) {
-            dataStreamForResponse.append({
-              type: "final_update",
-              sparks_spent: transactionResult?.sparks_spent || 0,
-              new_balance: transactionResult?.new_balance,
-            });
+          if (sparksError) {
+            console.error(
+              "Error in log_and_spend_sparks RPC:",
+              sparksError.message
+            );
+          } else if (sparksResult) {
+            // Send final metadata to the client
+            const metadata = {
+              type: "metadata",
+              data: {
+                messageId: assistantMessageShell.id,
+                sparksCost: sparksResult.sparks_spent,
+                newBalance: sparksResult.new_balance,
+              },
+            };
+            controller.enqueue(
+              encoder.encode(`\n\n[METADATA]${JSON.stringify(metadata)}`)
+            );
           }
         }
 
-        // Always close the data stream
-        if (dataStreamForResponse) {
-          dataStreamForResponse.close();
-        }
+        controller.close();
+      },
+      cancel() {
+        console.log("Stream cancelled by client.");
       },
     });
 
-    // Append initial data for client UI (e.g., model used, if client wants to confirm)
-    // The client already knows the model, but this is an example.
-    // The main purpose of StreamData here is for the text stream itself.
-    // dataStreamForResponse.append({ // This initial append block can be removed or kept if other initial data is needed.
-    // ui_model_used: modelId, // Example: send model used for UI indication
-    // ui_created_at: new Date().toISOString(),
-    // }); // For now, let's assume no other initial data is strictly needed for this flow.
-    // Do not close dataStreamForResponse here, it's closed in onFinish or if an error occurs
-
-    return result.toDataStreamResponse({ data: dataStreamForResponse });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   } catch (error: unknown) {
     console.error("API Route Error:", error);
     let errorMessage = "Internal server error.";
     if (error instanceof Error) errorMessage = error.message;
-    if (
-      dataStreamForResponse &&
-      typeof dataStreamForResponse.close === "function"
-    ) {
-      // Check before closing
-      dataStreamForResponse.close();
-    }
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

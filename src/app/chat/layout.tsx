@@ -150,10 +150,13 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
 
   // Mobile variant: Slides in/out
   const mobileSidebarVariants = {
-    open: { x: 0, transition: { type: "spring", stiffness: 300, damping: 30 } },
+    open: {
+      x: 0,
+      transition: { type: "spring" as const, stiffness: 300, damping: 30 },
+    },
     closed: {
       x: "-100%",
-      transition: { type: "spring", stiffness: 300, damping: 30 },
+      transition: { type: "spring" as const, stiffness: 300, damping: 30 },
     },
   };
 
@@ -163,7 +166,7 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
       width: "18rem", // w-72
       opacity: 1,
       transition: {
-        type: "spring",
+        type: "spring" as const,
         stiffness: 300,
         damping: 30,
         duration: 0.2,
@@ -173,7 +176,7 @@ export default function ChatAppLayout({ children }: ChatAppLayoutProps) {
       width: 0,
       opacity: 0,
       transition: {
-        type: "spring",
+        type: "spring" as const,
         stiffness: 300,
         damping: 30,
         duration: 0.2,

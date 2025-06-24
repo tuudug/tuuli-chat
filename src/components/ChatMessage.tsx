@@ -21,19 +21,13 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
   // Extract attachment data if present (for user messages with images)
   // Prioritize DB fields for URL, then fallback to local data for preview
-  const localAttachmentPreview = message.data?.attachment as
-    | { type: string; content: string; name: string }
-    | undefined;
-
   const imageUrl = message.attachment_url;
-  const imageName = message.attachment_name || localAttachmentPreview?.name;
-  const imageType = message.attachment_type || localAttachmentPreview?.type;
+  const imageName = message.attachment_name;
+  const imageType = message.attachment_type;
+  const localPreviewSrc = message.attachment_preview;
 
   const displayableImageSrc =
-    imageUrl ||
-    (localAttachmentPreview?.type?.startsWith("image/")
-      ? localAttachmentPreview?.content
-      : null);
+    imageUrl || (imageType?.startsWith("image/") ? localPreviewSrc : null);
   const isImageAttachment =
     isUser && imageType?.startsWith("image/") && displayableImageSrc;
 

@@ -115,12 +115,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to handle sparks spending for messages
 CREATE OR REPLACE FUNCTION spend_sparks_for_message(
-  user_uuid UUID,
-  sparks_cost INTEGER,
+  estimated_input INTEGER,
+  estimated_output INTEGER,
   message_uuid UUID,
   model_id VARCHAR(50),
-  estimated_input INTEGER,
-  estimated_output INTEGER
+  sparks_cost INTEGER,
+  user_uuid UUID
 )
 RETURNS JSONB AS $$
 DECLARE

@@ -6,11 +6,7 @@ import {
   GeminiModelId,
   Message,
   MODEL_DETAILS,
-  ResponseLengthSetting,
-  DEFAULT_RESPONSE_LENGTH_SETTING,
 } from "@/lib/types"; // Use new model types/constants
-import { Message as AIMessage, type Attachment } from "ai"; // Added CoreMessage
-import { useChat } from "ai/react";
 import { useRouter, useSearchParams } from "next/navigation"; // Import useSearchParams
 import { useSparks } from "@/contexts/SparksContext";
 import React, {
@@ -110,15 +106,17 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       const fetchedMessages: Message[] = messageData || [];
 
       let fetchedModel = DEFAULT_MODEL_ID; // Use new default
-      const firstAssistantMessage = fetchedMessages.find(
-        (msg) => msg.role === "assistant" && msg.model_used
-      );
+      // Find the *last* assistant message to get the most recently used model
+      const lastAssistantMessage = [...fetchedMessages]
+        .reverse()
+        .find((msg) => msg.role === "assistant" && msg.model_used);
+
       // Check if the fetched model_used is a valid GeminiModelId
       const isValidModel = MODEL_DETAILS.some(
-        (detail) => detail.id === firstAssistantMessage?.model_used
+        (detail) => detail.id === lastAssistantMessage?.model_used
       );
-      if (firstAssistantMessage?.model_used && isValidModel) {
-        fetchedModel = firstAssistantMessage.model_used as GeminiModelId;
+      if (lastAssistantMessage?.model_used && isValidModel) {
+        fetchedModel = lastAssistantMessage.model_used as GeminiModelId;
       }
 
       return { initialMessages: fetchedMessages, fetchedModel };
@@ -139,82 +137,16 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     }
   }, [chatId, supabase]);
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit: originalHandleSubmit, // Renamed to avoid conflict
-    error: _chatError,
-    setMessages,
-    append, // We will use append now
-    data,
-    isLoading, // from useChat, can be used for isWaitingForResponse
-  } = useChat({
-    api: "/api/chat",
-    id: chatId !== "new" ? chatId : undefined, // This will be set to client-generated UID for new chats
-    initialMessages: [],
-    onResponse: (response) => {
-      if (!response.ok) {
-        console.error("Streaming API response error:", response.statusText);
-        setResponseError(`Error: ${response.status} ${response.statusText}`);
-      }
-      setIsAwaitingFirstToken(false); // Use renamed setter
-    },
-    onFinish: (finishedMessage) => {
-      if (finishedMessage.role === "assistant") {
-      }
-      // isLoading from useChat will become false automatically by the SDK
-    },
-    onError: (err) => {
-      console.error("useChat hook error:", err);
-      setResponseError(err.message || "An error occurred during streaming.");
-      // isLoading from useChat will become false automatically
-    },
-  });
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  // Effect to process final data from the stream
-  useEffect(() => {
-    if (!data || data.length === 0) return;
-
-    const lastDataObject = data[data.length - 1] as {
-      type?: string;
-      sparks_spent?: number;
-      new_balance?: number;
-    };
-
-    if (lastDataObject?.type === "final_update") {
-      const { sparks_spent, new_balance } = lastDataObject;
-
-      // Update global sparks balance
-      if (typeof new_balance === "number") {
-        setSparksBalance(new_balance);
-      }
-
-      // Update the last assistant message with its final cost
-      if (typeof sparks_spent === "number" && sparks_spent > 0) {
-        setMessages((currentMessages) => {
-          const lastAssistantMessageIndex = [...currentMessages]
-            .reverse()
-            .findIndex((m) => m.role === "assistant");
-
-          if (lastAssistantMessageIndex !== -1) {
-            const originalIndex =
-              currentMessages.length - 1 - lastAssistantMessageIndex;
-            const updatedMessages = [...currentMessages];
-            const messageToUpdate = {
-              ...updatedMessages[originalIndex],
-              sparks_cost: sparks_spent,
-              model_used: selectedModel, // Add the model used
-              created_at: new Date().toISOString(), // Add a fresh timestamp
-            };
-            updatedMessages[originalIndex] = messageToUpdate;
-            return updatedMessages;
-          }
-          return currentMessages;
-        });
-      }
-    }
-  }, [data, setMessages, setSparksBalance, selectedModel]);
+  const handleInputChange = (
+    e: ChangeEvent<HTMLInputElement> | ChangeEvent<HTMLTextAreaElement>
+  ) => {
+    setInput(e.target.value);
+  };
 
   // Effect for fetching initial data for existing chats
   useEffect(() => {
@@ -223,7 +155,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       if (!isNewChatFlow) {
         // Only fetch if not part of the new chat flow already handled
         fetchInitialData().then(({ initialMessages, fetchedModel }) => {
-          setMessages(initialMessages as unknown as AIMessage[]);
+          setMessages(initialMessages);
           setSelectedModel(fetchedModel);
         });
       }
@@ -285,82 +217,116 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           setChatTitle("New Conversation"); // Or generate from message
           setSelectedModel(storedData.model);
 
-          const userMessageForDisplay: AIMessage = {
-            id: uuidv4(), // local unique ID for display
+          const userMessage: Message = {
+            id: uuidv4(),
             role: "user",
             content: storedData.message,
-            createdAt: new Date(),
-            // @ts-expect-error // Add custom attachment property for local display
-            attachment: storedData.attachmentInfo?.base64Content
-              ? {
-                  name: storedData.attachmentInfo.name,
-                  type: storedData.attachmentInfo.type,
-                  content: storedData.attachmentInfo.base64Content, // For immediate display
-                }
-              : undefined,
-          };
-          // setMessages([userMessageForDisplay]); // REMOVED: Let append handle adding the user message
-          console.log(
-            "[ChatInterface newChatEffect] User message prepared for display (but not setting directly):",
-            userMessageForDisplay
-          );
-          setInitialMessagesFetched(true); // Mark as fetched to prevent refetch
-
-          // Prepare data for `append`
-          const messageToAppend: { role: "user"; content: string } = {
-            // Ensure content is string for append
-            role: "user",
-            content: storedData.message, // storedData.message is already a string
+            created_at: new Date().toISOString(),
+            attachment_name: storedData.attachmentInfo?.name,
+            attachment_type: storedData.attachmentInfo?.type,
+            attachment_preview: storedData.attachmentInfo?.base64Content,
           };
 
-          let attachmentsForSdk: Attachment[] | undefined = undefined;
-          if (
-            storedData.attachmentInfo?.url &&
-            (storedData.attachmentInfo.type.startsWith("image/") ||
-              storedData.attachmentInfo.type.startsWith("text/"))
-          ) {
-            attachmentsForSdk = [
-              {
-                name: storedData.attachmentInfo.name,
-                contentType: storedData.attachmentInfo.type,
-                url: storedData.attachmentInfo.url,
+          const initialMessages: Message[] = [userMessage];
+          setMessages(initialMessages);
+          setInitialMessagesFetched(true);
+          setUiReadyForNewChatSetup(true);
+
+          // Immediately trigger the API call
+          setIsAwaitingFirstToken(true);
+          setIsLoading(true);
+
+          fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: initialMessages,
+              data: {
+                modelId: storedData.model,
+                chatId: chatId,
+                attachment_url: storedData.attachmentInfo?.url,
+                attachment_content: storedData.attachmentInfo?.base64Content,
+                attachment_name: storedData.attachmentInfo?.name,
+                attachment_type: storedData.attachmentInfo?.type,
               },
-            ];
-          }
-
-          interface NewChatApiData {
-            // Removed index signature as 'as any' is used
-            chatId: string;
-            modelId: GeminiModelId;
-            attachment_url?: string;
-            attachment_name?: string;
-            attachment_type?: string;
-          }
-
-          const dataForApi: NewChatApiData = {
-            chatId: chatId, // This is the client-generated UID
-            modelId: storedData.model,
-            ...(storedData.attachmentInfo?.url && {
-              attachment_url: storedData.attachmentInfo.url,
-              attachment_name: storedData.attachmentInfo.name,
-              attachment_type: storedData.attachmentInfo.type,
             }),
-          };
+          })
+            .then(async (response) => {
+              if (!response.body) throw new Error("No response body");
 
-          setIsAwaitingFirstToken(true); // Manually set waiting state before append
-          append(messageToAppend, {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            data: dataForApi as any,
-            experimental_attachments: attachmentsForSdk,
-          });
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder();
+              let assistantResponse = "";
+              const assistantMessageId = uuidv4();
 
-          sessionStorage.removeItem(`chat_init_${chatId}`);
-          setUiReadyForNewChatSetup(true); // Signal that UI can now be shown with correct model
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: assistantMessageId,
+                  role: "assistant",
+                  content: "",
+                  created_at: new Date().toISOString(),
+                  model_used: storedData.model, // Add model to placeholder
+                },
+              ]);
 
-          // Clean up URL query param
-          const newPath = `/chat/${chatId}`;
-          router.replace(newPath, { scroll: false }); // Use replace to avoid back button issues
-          processedNewChatIdRef.current = chatId; // Mark as processed
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const rawChunk = decoder.decode(value);
+                const metadataSentinel = "\n\n[METADATA]";
+                if (rawChunk.includes(metadataSentinel)) {
+                  const [contentPart, metadataPart] =
+                    rawChunk.split(metadataSentinel);
+                  assistantResponse += contentPart;
+                  try {
+                    const metadata = JSON.parse(metadataPart);
+                    if (metadata.type === "metadata") {
+                      setMessages((prev) =>
+                        prev.map((msg) =>
+                          msg.id === assistantMessageId
+                            ? {
+                                ...msg,
+                                id: metadata.data.messageId,
+                                sparks_cost: metadata.data.sparksCost,
+                                content: assistantResponse,
+                              }
+                            : msg
+                        )
+                      );
+                      if (typeof metadata.data.newBalance === "number") {
+                        setSparksBalance(metadata.data.newBalance);
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Failed to parse metadata JSON:", e);
+                  }
+                } else {
+                  assistantResponse += rawChunk;
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === assistantMessageId
+                        ? { ...msg, content: assistantResponse }
+                        : msg
+                    )
+                  );
+                }
+              }
+            })
+            .catch((err) => {
+              setError(err as Error);
+              setResponseError(
+                err instanceof Error ? err.message : "An unknown error occurred"
+              );
+            })
+            .finally(() => {
+              setIsLoading(false);
+              setIsAwaitingFirstToken(false);
+              sessionStorage.removeItem(`chat_init_${chatId}`);
+              const newPath = `/chat/${chatId}`;
+              router.replace(newPath, { scroll: false });
+              processedNewChatIdRef.current = chatId;
+            });
         } catch (parseError) {
           console.error(
             `[ChatInterface newChatEffect] Error parsing sessionStorage data for key ${storageKey}:`,
@@ -394,31 +360,10 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     isNewChatFlowFromParams, // Use derived boolean
     router,
     setMessages,
-    append,
     setSelectedModel,
     supabase,
     // isNewChatFlowFromParams is already used, searchParams itself is not needed if isNewChatFlowFromParams is stable
   ]);
-
-  // This effect handles the old redirection logic from useChat's `data` object.
-  // It might conflict or be redundant with the new flow.
-  // Consider removing or adjusting if `data` from `useChat` is still used for redirection.
-  // For now, let's keep it but be aware.
-  useEffect(() => {
-    if (data && Array.isArray(data) && data.length > 0) {
-      const latestStreamDataPayload = data[data.length - 1] as {
-        chatId?: string;
-      };
-      // This condition `chatId === "new"` will likely not be met if we navigate away from /chat/new immediately.
-      if (latestStreamDataPayload?.chatId && chatId === "new") {
-        // This redirection should ideally be handled by the new flow's client-side navigation.
-        // router.push(`/chat/${latestStreamDataPayload.chatId}`);
-        console.warn(
-          "Old redirection logic triggered for chatId=new, this might be unexpected."
-        );
-      }
-    }
-  }, [data, chatId, router]);
 
   const handleNewChatSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
@@ -537,34 +482,46 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     e: React.FormEvent<HTMLFormElement>,
     attachmentFile?: File | null
   ) => {
-    // This is the original handleSubmit logic, now for existing chats
     e.preventDefault();
-    if (isLoading || isAwaitingFirstToken) return; // Use isLoading from useChat & renamed state
-
-    setResponseError(null);
-    setIsAwaitingFirstToken(true); // Still useful for immediate UI feedback
+    if (isLoading || isAwaitingFirstToken) return;
 
     const currentInputVal = input;
     if (!currentInputVal.trim() && !attachmentFile) {
-      setIsAwaitingFirstToken(false);
       return;
     }
 
-    let attachmentsForSdk: Attachment[] | undefined = undefined;
-    let attachmentMetadataForBackend:
+    setResponseError(null);
+    setIsAwaitingFirstToken(true);
+    setIsLoading(true);
+
+    let attachmentDataForBackend:
       | {
           attachment_url: string;
+          attachment_content: string;
           attachment_name: string;
           attachment_type: string;
         }
       | undefined = undefined;
-    // For existing chats, local preview data is added by useChat hook if we pass it in `append` or `handleSubmit`
-    // We need to ensure the user's message with attachment preview is added to `messages` state correctly.
-    // The `useChat` hook's `append` or `handleSubmit` should handle adding the user message with its attachments to the `messages` array.
+
+    let localAttachmentPreview:
+      | {
+          name: string;
+          type: string;
+          content: string; // base64
+        }
+      | undefined = undefined;
 
     if (attachmentFile) {
       try {
-        const base64String = await fileToBase64(attachmentFile); // For upload
+        const base64String = await fileToBase64(attachmentFile);
+
+        // For local preview
+        localAttachmentPreview = {
+          name: attachmentFile.name,
+          type: attachmentFile.type,
+          content: base64String,
+        };
+
         // Upload to get public URL
         const uploadResponse = await fetch("/api/upload-attachment", {
           method: "POST",
@@ -585,20 +542,9 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         }
         const uploadedAttachment = await uploadResponse.json();
 
-        if (
-          attachmentFile.type.startsWith("image/") ||
-          attachmentFile.type.startsWith("text/")
-        ) {
-          attachmentsForSdk = [
-            {
-              name: uploadedAttachment.name,
-              contentType: uploadedAttachment.type,
-              url: uploadedAttachment.publicUrl,
-            },
-          ];
-        }
-        attachmentMetadataForBackend = {
+        attachmentDataForBackend = {
           attachment_url: uploadedAttachment.publicUrl,
+          attachment_content: base64String,
           attachment_name: uploadedAttachment.name,
           attachment_type: uploadedAttachment.type,
         };
@@ -613,54 +559,114 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             : "Failed to process attachment."
         );
         setIsAwaitingFirstToken(false);
+        setIsLoading(false);
         return;
       }
     }
 
-    // Define a more specific type for the data payload
-    interface ExistingChatApiData {
-      // Removed index signature as 'as any' is used
-      modelId: GeminiModelId;
-      chatId: string;
-      attachment_url?: string;
-      attachment_name?: string;
-      attachment_type?: string;
-    }
-
-    const dataForApi: ExistingChatApiData = {
-      modelId: selectedModel,
-      chatId: chatId, // Existing chatId
-      ...attachmentMetadataForBackend,
+    const userMessage: Message = {
+      id: uuidv4(),
+      role: "user",
+      content: currentInputVal,
+      created_at: new Date().toISOString(),
+      attachment_name: localAttachmentPreview?.name,
+      attachment_type: localAttachmentPreview?.type,
+      // This is a custom property for local preview and needs to be handled in MessageDisplayArea
+      attachment_preview: localAttachmentPreview?.content,
     };
 
-    // The userMessageToAppend is implicitly handled by originalHandleSubmit when it takes `e` (the form event)
-    // which allows it to read `input` from its own closure from `useChat`.
-    // We just need to pass the event and the options.
+    const newMessages: Message[] = [...messages, userMessage];
 
-    // Manually add user message with attachment preview for immediate display
-    // The `useChat` hook should ideally handle this if `append` is used correctly.
-    // Let's rely on `originalHandleSubmit` to correctly form the user message with attachments.
-    // Or, if using `append`, we'd do:
-    // const displayMessage: AIMessage = {
-    //   id: uuidv4(),
-    //   role: 'user',
-    //   content: currentInputVal,
-    //   createdAt: new Date(),
-    //   ...(attachmentFile && localAttachmentPreviewDataForDisplay && {
-    //     // @ts-ignore
-    //     attachment: localAttachmentPreviewDataForDisplay
-    //   })
-    // };
-    // setMessages(prev => [...prev, displayMessage]);
-    // append({ role: 'user', content: currentInputVal }, { experimental_attachments: attachmentsForSdk, data: dataForApi });
+    setMessages(newMessages);
+    setInput("");
 
-    // Using originalHandleSubmit from useChat
-    originalHandleSubmit(e, {
-      // Pass the original event
-      experimental_attachments: attachmentsForSdk,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data: dataForApi as any,
-    });
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: newMessages,
+          data: {
+            modelId: selectedModel,
+            chatId: chatId,
+            ...attachmentDataForBackend,
+          },
+        }),
+      });
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantResponse = "";
+      const assistantMessageId = uuidv4();
+
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          created_at: new Date().toISOString(),
+          model_used: selectedModel, // Add model to placeholder
+        },
+      ]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const rawChunk = decoder.decode(value);
+
+        // Check for our metadata sentinel value
+        const metadataSentinel = "\n\n[METADATA]";
+        if (rawChunk.includes(metadataSentinel)) {
+          const [contentPart, metadataPart] = rawChunk.split(metadataSentinel);
+          assistantResponse += contentPart;
+
+          try {
+            const metadata = JSON.parse(metadataPart);
+            if (metadata.type === "metadata") {
+              setMessages((prevMessages) =>
+                prevMessages.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? {
+                        ...msg,
+                        id: metadata.data.messageId, // Update with the real ID from DB
+                        sparks_cost: metadata.data.sparksCost,
+                        content: assistantResponse, // Final content update
+                      }
+                    : msg
+                )
+              );
+              // Update the sparks balance in the context
+              if (typeof metadata.data.newBalance === "number") {
+                setSparksBalance(metadata.data.newBalance);
+              }
+            }
+          } catch (e) {
+            console.error("Failed to parse metadata JSON:", e);
+          }
+        } else {
+          assistantResponse += rawChunk;
+          setMessages((prevMessages) =>
+            prevMessages.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: assistantResponse }
+                : msg
+            )
+          );
+        }
+      }
+    } catch (error) {
+      setError(error as Error);
+    } finally {
+      setIsLoading(false);
+      setIsAwaitingFirstToken(false); // Reset loading state
+    }
   };
 
   // Determine which submit handler to use
@@ -738,7 +744,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             initialMessagesError={initialMessagesError}
             isAwaitingFirstToken={isAwaitingFirstToken} // Pass renamed state
             isOverallLoading={isLoading || isAwaitingFirstToken} // Pass combined state for general loading
-            responseError={responseError || _chatError?.message || null}
+            responseError={responseError || error?.message || null}
             onExampleQuestionClick={handleExampleQuestionClick}
             selectedModel={selectedModel}
           />
