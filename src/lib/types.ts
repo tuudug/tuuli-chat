@@ -39,6 +39,8 @@ export interface ModelDetail {
   performance: "Pro" | "Flash" | "Flash Lite";
   stars: number;
   supportsFiles: boolean;
+  supportsSearch: boolean;
+  supportsFast: boolean;
 }
 
 export const MODEL_DETAILS: ModelDetail[] = [
@@ -51,6 +53,8 @@ export const MODEL_DETAILS: ModelDetail[] = [
     performance: "Pro",
     stars: 5,
     supportsFiles: true,
+    supportsSearch: true,
+    supportsFast: false,
   },
   {
     id: "gemini-2.5-flash",
@@ -60,6 +64,8 @@ export const MODEL_DETAILS: ModelDetail[] = [
     performance: "Flash",
     stars: 3,
     supportsFiles: true,
+    supportsSearch: true,
+    supportsFast: false,
   },
   {
     id: "gemini-2.5-flash-lite-preview-06-17",
@@ -69,6 +75,8 @@ export const MODEL_DETAILS: ModelDetail[] = [
     performance: "Flash Lite",
     stars: 2,
     supportsFiles: false,
+    supportsSearch: false,
+    supportsFast: true,
   },
   // Gemini 2.0 Models
   {
@@ -79,6 +87,8 @@ export const MODEL_DETAILS: ModelDetail[] = [
     performance: "Flash",
     stars: 2,
     supportsFiles: true,
+    supportsSearch: false,
+    supportsFast: false,
   },
   {
     id: "gemini-2.0-flash-lite",
@@ -88,6 +98,8 @@ export const MODEL_DETAILS: ModelDetail[] = [
     performance: "Flash Lite",
     stars: 1,
     supportsFiles: false,
+    supportsSearch: false,
+    supportsFast: true,
   },
 ];
 

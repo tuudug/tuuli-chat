@@ -23,6 +23,8 @@ interface ChatInputAreaProps {
   isWaitingForResponse: boolean;
   messages?: Array<{ content: string }>; // Add messages for sparks calculation
   userSparks?: number; // Add user sparks balance
+  favoriteModel: GeminiModelId | null;
+  onSetFavoriteModel: (modelId: GeminiModelId) => void;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -34,6 +36,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   isWaitingForResponse,
   messages = [],
   userSparks = 0,
+  favoriteModel,
+  onSetFavoriteModel,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -110,6 +114,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             disabled={isWaitingForResponse}
+            favoriteModel={favoriteModel}
+            onSetFavoriteModel={onSetFavoriteModel}
           />
         </div>
         {/* Input Row */}

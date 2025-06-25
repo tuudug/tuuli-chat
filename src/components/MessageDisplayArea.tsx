@@ -1,69 +1,22 @@
 import React, { useRef, useEffect, useState } from "react";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-import {
-  MessageSquareIcon,
-  CalculatorIcon, // Math
-  AtomIcon, // Physics
-  FlaskConicalIcon, // Chemistry
-  CodeIcon, // Code
-} from "lucide-react";
+import { MessageSquareIcon } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";
-import TypingIndicator from "./TypingIndicator"; // Import the new component
-import { Message, GeminiModelId } from "@/lib/types"; // Use our Message type, add GeminiModelId
-
-// Define categories and example questions
-const categories = {
-  Math: {
-    icon: CalculatorIcon,
-    questions: [
-      "Explain the Pythagorean theorem.",
-      "What is the derivative of x^2?",
-      "Solve for x: 2x + 5 = 15",
-      "What are prime numbers?",
-    ],
-  },
-  Physics: {
-    icon: AtomIcon,
-    questions: [
-      "What is Newton's second law of motion?",
-      "Explain the theory of relativity.",
-      "What is quantum entanglement?",
-      "How does gravity work?",
-    ],
-  },
-  Chemistry: {
-    icon: FlaskConicalIcon,
-    questions: [
-      "What is the chemical formula for water?",
-      "Explain the difference between ionic and covalent bonds.",
-      "What is pH?",
-      "Balance the chemical equation: H2 + O2 -> H2O",
-    ],
-  },
-  Code: {
-    icon: CodeIcon,
-    questions: [
-      "Write a Python function to reverse a string.",
-      "Explain what an API is.",
-      "What is the difference between let and const in JavaScript?",
-      "How does CSS Flexbox work?",
-    ],
-  },
-};
-
-type CategoryName = keyof typeof categories;
+import TypingIndicator from "./TypingIndicator";
+import { Message, GeminiModelId } from "@/lib/types";
+import { categories, CategoryName } from "@/lib/chat-categories";
 
 interface MessageDisplayAreaProps {
-  messages: Message[]; // Use our Message type
+  messages: Message[];
   chatId: string;
   initialFetchLoading: boolean;
   initialMessagesError: string | null;
-  isAwaitingFirstToken: boolean; // New prop for typing indicator
-  isOverallLoading: boolean; // New prop for general loading states (like input disable)
+  isAwaitingFirstToken: boolean;
+  isOverallLoading: boolean;
   responseError: string | null;
   onExampleQuestionClick: (question: string) => void;
-  selectedModel: GeminiModelId; // Add selectedModel prop
+  selectedModel: GeminiModelId;
 }
 
 const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
@@ -71,11 +24,11 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   chatId,
   initialFetchLoading,
   initialMessagesError,
-  isAwaitingFirstToken, // Use new prop
-  isOverallLoading, // Use new prop
+  isAwaitingFirstToken,
+  isOverallLoading,
   responseError,
   onExampleQuestionClick,
-  selectedModel, // Destructure selectedModel
+  selectedModel,
 }) => {
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
   const [selectedCategory, setSelectedCategory] =
@@ -134,13 +87,9 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
               </p>
             </div>
           )}
-          {/* Initial State (New Chat) - Centered */}
           {showNewChatInitialState && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-primary">
-              {/* Category Buttons */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 w-full max-w-lg">
-                {" "}
-                {/* Added flex-wrap */}
                 {(Object.keys(categories) as CategoryName[]).map((catName) => {
                   const Icon = categories[catName].icon;
                   const isActive = selectedCategory === catName;
@@ -161,8 +110,6 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
               </div>
               {/* Example Questions for Selected Category */}
               <div className="space-y-3 w-full max-w-sm md:max-w-md">
-                {" "}
-                {/* Adjusted max-width */}
                 {categories[selectedCategory].questions.map((q) => (
                   <button
                     key={q}
@@ -184,42 +131,39 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
               {messages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
               ))}
-              {/* Typing Indicator - MOVED INSIDE */}
-              {isAwaitingFirstToken &&
-                messages.length > 0 && ( // Use isAwaitingFirstToken here
-                  <TypingIndicator />
+              {/* Typing Indicator */}
+              {isAwaitingFirstToken && messages.length > 0 && (
+                <TypingIndicator />
+              )}
+              {isOverallLoading &&
+                chatId === "new" &&
+                messages.length === 0 && (
+                  <div className="flex justify-start">
+                    <div
+                      className={`${
+                        selectedModel === "gemini-2.5-pro"
+                          ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
+                          : ""
+                      } animate-pulse`}
+                    >
+                      <div
+                        className={`p-3 rounded-lg bg-bg-input text-text-primary shadow-sm ${
+                          selectedModel === "gemini-2.5-pro"
+                            ? "rounded-[7px]"
+                            : ""
+                        }`}
+                      >
+                        <p className="text-xs text-text-secondary">
+                          {selectedModel === "gemini-2.5-pro"
+                            ? "Starting chat with Gemini 2.5 Pro (this may take a moment)..."
+                            : "Starting chat..."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 )}
             </div>
           )}
-
-          {/* Loading Indicator for first message submission */}
-          {isOverallLoading && // Use isOverallLoading for the "Starting chat..."
-            chatId === "new" &&
-            messages.length === 0 && // Only if no messages yet (i.e. truly the first submission)
-            (() => {
-              const isPro = selectedModel === "gemini-2.5-pro";
-              const proStyle = isPro
-                ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
-                : "";
-              const text = isPro
-                ? "Starting chat with Gemini 2.5 Pro (this may take a moment)..."
-                : "Starting chat...";
-
-              return (
-                <div className="flex justify-start">
-                  <div className={`${proStyle} animate-pulse`}>
-                    <div
-                      className={`p-3 rounded-lg bg-bg-input text-text-primary shadow-sm ${
-                        isPro ? "rounded-[7px]" : ""
-                      }`}
-                    >
-                      <p className="text-xs text-text-secondary">{text}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          {/* Typing Indicator - REMOVED FROM HERE */}
 
           {/* Display unified response errors */}
           {responseError && (

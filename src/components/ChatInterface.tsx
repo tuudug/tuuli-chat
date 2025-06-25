@@ -46,6 +46,9 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
   const [selectedModel, setSelectedModel] =
     useState<GeminiModelId>(DEFAULT_MODEL_ID); // Use new default
+  const [favoriteModel, setFavoriteModel] = useState<GeminiModelId | null>(
+    null
+  );
   const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [initialMessagesFetched, setInitialMessagesFetched] = useState(false);
   const [initialFetchLoading, setInitialFetchLoading] = useState(false);
@@ -142,6 +145,35 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Effect to load favorite model from localStorage on initial load
+  useEffect(() => {
+    const storedFavorite = localStorage.getItem("favoriteModel");
+    // Ensure the stored favorite is a valid model ID
+    if (storedFavorite && MODEL_DETAILS.some((m) => m.id === storedFavorite)) {
+      const favoriteModelId = storedFavorite as GeminiModelId;
+      setFavoriteModel(favoriteModelId);
+      // On a new chat page, automatically select the user's favorite model
+      if (chatId === "new") {
+        setSelectedModel(favoriteModelId);
+      }
+    } else if (chatId === "new") {
+      // If there's no favorite, default to 2.5 Flash Lite for new chats
+      setSelectedModel("gemini-2.5-flash-lite-preview-06-17");
+    }
+    // For existing chats, the model will be set by fetchInitialData
+  }, [chatId]); // Rerun when switching to a new chat page
+
+  const handleSetFavoriteModel = (modelId: GeminiModelId) => {
+    if (favoriteModel === modelId) {
+      // Unfavorite if the same model is clicked again
+      localStorage.removeItem("favoriteModel");
+      setFavoriteModel(null);
+    } else {
+      localStorage.setItem("favoriteModel", modelId);
+      setFavoriteModel(modelId);
+    }
+  };
+
   const handleInputChange = (
     e: ChangeEvent<HTMLInputElement> | ChangeEvent<HTMLTextAreaElement>
   ) => {
@@ -163,7 +195,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       // Reset state for /chat/new route before client-side navigation
       setMessages([]);
       setChatTitle("New Conversation");
-      setSelectedModel(DEFAULT_MODEL_ID);
+      // Logic for setting model on /chat/new is now in the new useEffect
       setInitialMessagesFetched(false); // Allow fetch if navigated away and back
       setInitialFetchLoading(false);
       setInitialMessagesError(null);
@@ -203,6 +235,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
 
       if (storedDataString) {
         try {
+          processedNewChatIdRef.current = chatId; // Mark as processed immediately
           const storedData = JSON.parse(storedDataString) as {
             message: string;
             model: GeminiModelId;
@@ -214,7 +247,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             };
           };
 
-          setChatTitle("New Conversation"); // Or generate from message
+          setChatTitle("New Conversation");
           setSelectedModel(storedData.model);
 
           const userMessage: Message = {
@@ -258,6 +291,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
               const decoder = new TextDecoder();
               let assistantResponse = "";
               const assistantMessageId = uuidv4();
+              let isFirstChunk = true;
 
               setMessages((prev) => [
                 ...prev,
@@ -266,13 +300,19 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
                   role: "assistant",
                   content: "",
                   created_at: new Date().toISOString(),
-                  model_used: storedData.model, // Add model to placeholder
+                  model_used: storedData.model,
                 },
               ]);
 
               while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+
+                if (isFirstChunk) {
+                  setIsAwaitingFirstToken(false);
+                  isFirstChunk = false;
+                }
+
                 const rawChunk = decoder.decode(value);
                 const metadataSentinel = "\n\n[METADATA]";
                 if (rawChunk.includes(metadataSentinel)) {
@@ -322,10 +362,9 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             .finally(() => {
               setIsLoading(false);
               setIsAwaitingFirstToken(false);
-              sessionStorage.removeItem(`chat_init_${chatId}`);
+              sessionStorage.removeItem(storageKey); // Clean up here
               const newPath = `/chat/${chatId}`;
               router.replace(newPath, { scroll: false });
-              processedNewChatIdRef.current = chatId;
             });
         } catch (parseError) {
           console.error(
@@ -604,6 +643,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       const decoder = new TextDecoder();
       let assistantResponse = "";
       const assistantMessageId = uuidv4();
+      let isFirstChunk = true;
 
       setMessages((prevMessages) => [
         ...prevMessages,
@@ -619,6 +659,12 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        if (isFirstChunk) {
+          setIsAwaitingFirstToken(false);
+          isFirstChunk = false;
+        }
+
         const rawChunk = decoder.decode(value);
 
         // Check for our metadata sentinel value
@@ -755,6 +801,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             handleFormSubmit={activeFormSubmitHandler} // Use the active handler
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
+            favoriteModel={favoriteModel}
+            onSetFavoriteModel={handleSetFavoriteModel}
             isWaitingForResponse={isLoading || isAwaitingFirstToken} // Keep combined state for disabling input
             messages={messages.map((msg) => ({ content: msg.content }))} // Pass message content for sparks calculation
             userSparks={sparksBalance || 0} // Pass user sparks balance from context
