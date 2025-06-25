@@ -100,30 +100,46 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
       if (!inline) {
         // Block code
+        if (!language) {
+          // Simple code block without language - just a small inline box
+          return (
+            <code
+              className={`${className} inline-block bg-gray-800 px-1 mx-1 py-1 rounded text-xs border border-gray-700 whitespace-nowrap`}
+              {...props}
+            >
+              {children}
+            </code>
+          );
+        }
+
+        // Code block with language - fancy version with header and copy button
         return (
-          <div className="relative group/code">
+          <div className="relative group/code w-full max-w-[calc(100vw-2rem)] sm:max-w-full">
             <div className="flex items-center justify-between bg-gray-800 px-3 py-2 text-xs text-gray-300 rounded-t-md border-b border-gray-700">
-              <span>{language || "code"}</span>
+              <span className="truncate">{language}</span>
               <button
                 onClick={() => copyToClipboard(codeString, true, blockId)}
-                className="opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-1 hover:text-white"
+                className="opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-1 hover:text-white flex-shrink-0 ml-2"
                 title="Copy code"
               >
                 {copiedCodeBlock === blockId ? (
                   <>
                     <CheckIcon size={14} />
-                    <span>Copied!</span>
+                    <span className="hidden sm:inline">Copied!</span>
                   </>
                 ) : (
                   <>
                     <CopyIcon size={14} />
-                    <span>Copy</span>
+                    <span className="hidden sm:inline">Copy</span>
                   </>
                 )}
               </button>
             </div>
-            <pre className="bg-gray-900 p-3 rounded-b-md overflow-x-auto text-sm">
-              <code className={`${className} text-sm`} {...props}>
+            <pre className="bg-gray-900 px-3 rounded-b-md overflow-x-auto text-sm">
+              <code
+                className={`${className} text-sm whitespace-pre`}
+                {...props}
+              >
                 {children}
               </code>
             </pre>
@@ -157,22 +173,48 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         .prose pre {
           font-size: 0.875rem !important; /* Force 14px (text-sm) for pre blocks */
         }
+        .prose > * {
+          max-width: 100% !important; /* Ensure all prose elements respect container width */
+        }
+        .prose table {
+          width: 100% !important;
+          table-layout: auto !important;
+        }
+        .prose ul,
+        .prose ol {
+          width: 100% !important;
+        }
+        @media (max-width: 640px) {
+          .prose *,
+          .prose pre,
+          .prose code,
+          .prose div,
+          .prose p {
+            max-width: calc(100vw - 2rem) !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+          }
+          .prose pre {
+            overflow-x: auto !important;
+            white-space: pre !important;
+          }
+        }
       `}</style>
       <div
         className={`group flex items-start gap-3 ${
           isUser ? "justify-end" : "justify-start"
-        }`}
+        } px-2 sm:px-0`}
       >
-        {/* Assistant Avatar */}
+        {/* Assistant Avatar - Hidden on mobile */}
         {!isUser && (
-          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-bg-input flex-shrink-0">
+          <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0">
             <BotIcon size={16} className="text-text-secondary" />
           </div>
         )}
 
         {/* Message Bubble and Metadata */}
         <div
-          className={`flex flex-col max-w-[75%] ${
+          className={`flex flex-col w-full max-w-[calc(100vw-1rem)] sm:max-w-[75%] ${
             isUser ? "items-end" : "items-start"
           }`}
         >
@@ -194,7 +236,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               )}
             </button>
             <div
-              className={`p-3 rounded-lg ${
+              className={`p-3 rounded-lg max-w-[calc(100vw-1rem)] sm:max-w-full ${
                 isUser
                   ? "bg-btn-primary text-text-primary rounded" // User style
                   : "bg-bg-input text-text-primary rounded" // Assistant style
@@ -203,7 +245,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               {isUser ? (
                 <div className="text-sm">
                   {isImageAttachment && displayableImageSrc && (
-                    <div className="mb-2 relative w-full max-w-[20rem] aspect-[5/4]">
+                    <div className="mb-2 relative w-full max-w-[calc(100vw-4rem)] sm:max-w-[20rem] aspect-[5/4]">
                       <Image
                         src={displayableImageSrc}
                         alt={imageName || "Uploaded image"}
@@ -215,7 +257,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
               ) : (
-                <div className="prose prose-sm prose-invert max-w-none text-white">
+                <div className="prose prose-sm prose-invert max-w-none text-white w-full overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-full">
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
@@ -247,9 +289,9 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           </div>
         </div>
 
-        {/* User Avatar */}
+        {/* User Avatar - Hidden on mobile */}
         {isUser && (
-          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-bg-input flex-shrink-0">
+          <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0">
             <UserIcon size={16} className="text-text-secondary" />
           </div>
         )}

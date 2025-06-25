@@ -102,3 +102,25 @@ export const streamChatResponse = (
     body: JSON.stringify({ messages, data }),
   });
 };
+
+// Generates a title for a chat and returns the new title
+export const generateChatTitle = async (
+  chatId: string,
+  userPrompt: string,
+  assistantResponse: string
+) => {
+  const response = await fetch("/api/chat/generate-title", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatId, userPrompt, assistantResponse }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    // Don't throw an error, just log it, as title generation is not critical
+    console.error("Failed to generate chat title:", errorData.error);
+    return null;
+  }
+  const data = await response.json();
+  return data.newTitle as string;
+};

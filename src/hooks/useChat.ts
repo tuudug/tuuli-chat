@@ -44,7 +44,12 @@ export const useChat = (chatId: string) => {
   const [uiReadyForNewChatSetup, setUiReadyForNewChatSetup] = useState(false);
 
   const handleStreamingResponse = useCallback(
-    async (response: Response, currentModel: GeminiModelId) => {
+    async (
+      response: Response,
+      currentModel: GeminiModelId,
+      chatId: string,
+      messagesBeforeSubmit: Message[]
+    ) => {
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -111,8 +116,24 @@ export const useChat = (chatId: string) => {
           );
         }
       }
+
+      // Title Generation for new chats
+      if (
+        messagesBeforeSubmit.length === 1 &&
+        messagesBeforeSubmit[0].role === "user"
+      ) {
+        const userPrompt = messagesBeforeSubmit[0].content;
+        // assistantResponse is the accumulated response from the stream
+        chatApi
+          .generateChatTitle(chatId, userPrompt, assistantResponse)
+          .then((newTitle) => {
+            if (newTitle) {
+              setChatTitle(newTitle);
+            }
+          });
+      }
     },
-    [setSparksBalance]
+    [setSparksBalance, setChatTitle]
   );
 
   // Effect for fetching initial data for existing chats
@@ -209,7 +230,9 @@ export const useChat = (chatId: string) => {
               attachment_type: storedData.attachmentInfo?.type,
             })
             .then((response) =>
-              handleStreamingResponse(response, storedData.model)
+              handleStreamingResponse(response, storedData.model, chatId, [
+                userMessage,
+              ])
             )
             .catch((err) => {
               setError(
@@ -299,7 +322,12 @@ export const useChat = (chatId: string) => {
         chatId: chatId,
         ...attachmentDataForApi,
       });
-      await handleStreamingResponse(response, selectedModel);
+      await handleStreamingResponse(
+        response,
+        selectedModel,
+        chatId,
+        newMessages
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
@@ -322,8 +350,7 @@ export const useChat = (chatId: string) => {
 
     setIsAwaitingFirstToken(true);
     const newClientChatId = uuidv4();
-    const preliminaryTitle =
-      currentInputVal.substring(0, 50) || "New Conversation";
+    const preliminaryTitle = "New chat";
 
     try {
       await chatApi.createChatShell(newClientChatId, preliminaryTitle);
