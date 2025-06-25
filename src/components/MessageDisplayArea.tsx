@@ -1,11 +1,11 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect } from "react";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import { MessageSquareIcon } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";
 import TypingIndicator from "./TypingIndicator";
 import { Message, GeminiModelId } from "@/lib/types";
-import { categories, CategoryName } from "@/lib/chat-categories";
+import NewChatSuggestions from "./chat/NewChatSuggestions";
 
 interface MessageDisplayAreaProps {
   messages: Message[];
@@ -31,8 +31,6 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   selectedModel,
 }) => {
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
-  const [selectedCategory, setSelectedCategory] =
-    useState<CategoryName>("Math");
 
   useEffect(() => {
     if (scrollAreaViewportRef.current) {
@@ -49,7 +47,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
     messages.length === 0 &&
     chatId !== "new";
   const showNewChatInitialState =
-    messages.length === 0 && chatId === "new" && !isOverallLoading; // Use isOverallLoading here
+    messages.length === 0 && chatId === "new" && !isOverallLoading;
 
   return (
     <ScrollArea.Root className="flex-1 overflow-hidden">
@@ -58,14 +56,12 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
         className="h-full w-full"
       >
         <div className="flex flex-col min-h-full p-4 md:p-6 lg:p-8 pb-28">
-          {/* Initial Loading State */}
           {showInitialLoading && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-secondary">
-              <LoadingSpinner /> {/* Use the new spinner component */}
+              <LoadingSpinner />
               <p className="text-lg">Loading chat...</p>
             </div>
           )}
-          {/* Initial Error State */}
           {showInitialError && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-secondary">
               <MessageSquareIcon className="mb-4 h-12 w-12 text-red-300" />
@@ -75,7 +71,6 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
               <p className="text-sm">{initialMessagesError}</p>
             </div>
           )}
-          {/* Empty Chat State (Existing Chat) */}
           {showEmptyChat && (
             <div className="flex-1 flex flex-col items-center justify-center text-center text-text-secondary">
               <MessageSquareIcon className="mb-4 h-12 w-12" />
@@ -88,50 +83,16 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
             </div>
           )}
           {showNewChatInitialState && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center text-text-primary">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 w-full max-w-lg">
-                {(Object.keys(categories) as CategoryName[]).map((catName) => {
-                  const Icon = categories[catName].icon;
-                  const isActive = selectedCategory === catName;
-                  return (
-                    <button
-                      key={catName}
-                      onClick={() => setSelectedCategory(catName)}
-                      className={`px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors ${
-                        isActive
-                          ? "bg-btn-primary text-white"
-                          : "bg-bg-input hover:bg-opacity-80"
-                      }`}
-                    >
-                      <Icon size={16} /> {catName}
-                    </button>
-                  );
-                })}
-              </div>
-              {/* Example Questions for Selected Category */}
-              <div className="space-y-3 w-full max-w-sm md:max-w-md">
-                {categories[selectedCategory].questions.map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => onExampleQuestionClick(q)}
-                    className="w-full text-left p-3 rounded-lg bg-bg-input hover:bg-opacity-80 text-sm"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <NewChatSuggestions
+              onExampleQuestionClick={onExampleQuestionClick}
+            />
           )}
 
-          {/* Actual Messages */}
           {!showInitialLoading && !showInitialError && (
             <div className="space-y-4 pb-4 sm:px-4 md:px-16">
-              {" "}
-              {/* Padding starts from sm breakpoint */}
               {messages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
               ))}
-              {/* Typing Indicator */}
               {isAwaitingFirstToken && messages.length > 0 && (
                 <TypingIndicator />
               )}
@@ -165,7 +126,6 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
             </div>
           )}
 
-          {/* Display unified response errors */}
           {responseError && (
             <div className="flex justify-center w-full my-4">
               <div className="max-w-[75%]">
