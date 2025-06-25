@@ -33,6 +33,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     uiReadyForNewChat,
     sparksBalance,
     handleExampleQuestionClick,
+    userAvatar,
   } = useChat(chatId);
 
   const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
@@ -86,6 +87,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
             responseError={error}
             onExampleQuestionClick={handleExampleQuestionClick}
             selectedModel={selectedModel}
+            userAvatar={userAvatar}
           />
 
           <ChatInputArea

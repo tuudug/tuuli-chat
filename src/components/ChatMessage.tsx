@@ -12,9 +12,10 @@ import FinalSparksCost from "./FinalSparksCost";
 
 interface ChatMessageProps {
   message: Message; // Expect our Message type
+  userAvatar?: string | null;
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
   const isUser = message.role === "user";
   const isProModel =
     message.role === "assistant" && message.model_used === "gemini-2.5-pro";
@@ -291,8 +292,18 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
         {/* User Avatar - Hidden on mobile */}
         {isUser && (
-          <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0">
-            <UserIcon size={16} className="text-text-secondary" />
+          <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0 overflow-hidden">
+            {userAvatar ? (
+              <Image
+                src={userAvatar}
+                alt="User Avatar"
+                width={32}
+                height={32}
+                className="object-cover w-full h-full"
+              />
+            ) : (
+              <UserIcon size={16} className="text-text-secondary" />
+            )}
           </div>
         )}
       </div>

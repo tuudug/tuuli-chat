@@ -17,6 +17,7 @@ interface MessageDisplayAreaProps {
   responseError: string | null;
   onExampleQuestionClick: (question: string) => void;
   selectedModel: GeminiModelId;
+  userAvatar?: string | null;
 }
 
 const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
@@ -29,6 +30,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   responseError,
   onExampleQuestionClick,
   selectedModel,
+  userAvatar,
 }) => {
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +93,11 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
           {!showInitialLoading && !showInitialError && (
             <div className="space-y-4 pb-4 sm:px-4 md:px-16">
               {messages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
+                <ChatMessage
+                  key={msg.id}
+                  message={msg}
+                  userAvatar={userAvatar}
+                />
               ))}
               {isAwaitingFirstToken && messages.length > 0 && (
                 <TypingIndicator />

@@ -23,7 +23,7 @@ type AttachmentApiData = {
 export const useChat = (chatId: string) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { sparksBalance, setSparksBalance } = useSparks();
+  const { sparksBalance, setSparksBalance, user } = useSparks();
   const isNewChatFlowFromParams = searchParams.get("newChat") === "true";
   const processedNewChatIdRef = useRef<string | null>(null);
 
@@ -401,6 +401,7 @@ export const useChat = (chatId: string) => {
     input,
     selectedModel,
     favoriteModel,
+    userAvatar: user?.user_metadata.avatar_url,
     // Loading & Error
     isLoading: isLoading || isAwaitingFirstToken,
     initialFetchLoading,

@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/storage/v1/object/public/user-attachments/**",
       },
+      {
+        protocol: "https",
+        hostname: "*.googleusercontent.com",
+      },
     ],
   },
 };
