@@ -1,4 +1,10 @@
-import React, { ChangeEvent, KeyboardEvent, useState, useRef } from "react";
+import React, {
+  ChangeEvent,
+  KeyboardEvent,
+  useState,
+  useRef,
+  useEffect,
+} from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import {
   ArrowUpIcon,
@@ -40,6 +46,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSetFavoriteModel,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
+  const [dragCounter, setDragCounter] = useState(0); // To prevent flashing
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get current model details to check if it supports files
@@ -47,6 +55,57 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     (model) => model.id === selectedModel
   );
   const supportsFiles = currentModel?.supportsFiles ?? false;
+
+  // Document-level drag and drop handlers to detect dragging anywhere on the page
+  useEffect(() => {
+    const handleDocumentDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      // Only show indicator if files are being dragged
+      if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+        // Check if any of the items are files
+        const hasFiles = Array.from(e.dataTransfer.items).some(
+          (item) => item.kind === "file"
+        );
+        if (hasFiles) {
+          setDragCounter((prev) => prev + 1);
+          setIsDragging(true);
+        }
+      }
+    };
+
+    const handleDocumentDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      setDragCounter((prev) => {
+        const newCounter = prev - 1;
+        if (newCounter === 0) {
+          setIsDragging(false);
+        }
+        return newCounter;
+      });
+    };
+
+    const handleDocumentDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDocumentDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setDragCounter(0);
+      setIsDragging(false);
+    };
+
+    document.addEventListener("dragenter", handleDocumentDragEnter);
+    document.addEventListener("dragleave", handleDocumentDragLeave);
+    document.addEventListener("dragover", handleDocumentDragOver);
+    document.addEventListener("drop", handleDocumentDrop);
+
+    return () => {
+      document.removeEventListener("dragenter", handleDocumentDragEnter);
+      document.removeEventListener("dragleave", handleDocumentDragLeave);
+      document.removeEventListener("dragover", handleDocumentDragOver);
+      document.removeEventListener("drop", handleDocumentDrop);
+    };
+  }, []);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -98,14 +157,75 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Extract message content for sparks calculation
   const messageContents = messages.map((msg) => msg.content);
 
+  // --- Form-level Drag and Drop Handlers (for actual file dropping) ---
+  const handleFormDragOver = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault(); // Necessary to allow dropping
+  };
+
+  const handleFormDrop = (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Reset the global drag state
+    setDragCounter(0);
+    setIsDragging(false);
+
+    if (!supportsFiles) return;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      setSelectedFile(files[0]);
+    }
+  };
+  // --- End Form-level Drag and Drop Handlers ---
+
   return (
     <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full sm:mb-4">
       {" "}
       {/* Padding starts from sm breakpoint, sm:mb-4 for larger screens, mobile margin removed */}
       <form
-        onSubmit={onFormSubmit} // Use the new submit handler
-        className="p-3 bg-gray-800/50 border border-gray-700/50 rounded-xl focus-within:border-gray-600 transition-all duration-150 flex flex-col" // Changed flex direction
+        onSubmit={onFormSubmit}
+        onDragOver={handleFormDragOver}
+        onDrop={handleFormDrop}
+        className={`p-3 bg-gray-800/50 border rounded-xl focus-within:border-gray-600 transition-all duration-150 flex flex-col relative ${
+          isDragging
+            ? supportsFiles
+              ? "border-blue-500 bg-blue-500/10"
+              : "border-red-500 bg-red-500/10"
+            : "border-gray-700/50"
+        }`}
       >
+        {/* Drag and Drop Overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-gray-900/80 rounded-xl">
+            <div className="text-center">
+              {supportsFiles ? (
+                <>
+                  <PaperclipIcon
+                    size={32}
+                    className="mx-auto mb-2 text-blue-400"
+                  />
+                  <p className="text-blue-400 font-medium">
+                    Drop here to attach file
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    Release to attach your file
+                  </p>
+                </>
+              ) : (
+                <>
+                  <XIcon size={32} className="mx-auto mb-2 text-red-400" />
+                  <p className="text-red-400 font-medium">
+                    This model doesn&apos;t support files
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    Choose a model that supports attachments
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         {/* Model Selector - Moved Above */}
         <div className="mb-2 flex justify-start">
           {" "}

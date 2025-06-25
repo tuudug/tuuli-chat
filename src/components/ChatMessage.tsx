@@ -1,12 +1,12 @@
 "use client"; // Needs client-side libraries for rendering
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image"; // Import next/image
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import { UserIcon, BotIcon } from "lucide-react";
+import { UserIcon, BotIcon, CopyIcon, CheckIcon } from "lucide-react";
 import { Message, MODEL_DETAILS } from "@/types";
 import FinalSparksCost from "./FinalSparksCost";
 
@@ -18,6 +18,30 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
   const isProModel =
     message.role === "assistant" && message.model_used === "gemini-2.5-pro";
+
+  // Copy state management
+  const [isCopied, setIsCopied] = useState(false);
+  const [copiedCodeBlock, setCopiedCodeBlock] = useState<string | null>(null);
+
+  // Copy functionality
+  const copyToClipboard = async (
+    text: string,
+    isCodeBlock = false,
+    blockId?: string
+  ) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (isCodeBlock && blockId) {
+        setCopiedCodeBlock(blockId);
+        setTimeout(() => setCopiedCodeBlock(null), 2000);
+      } else {
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      }
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+    }
+  };
 
   // Extract attachment data if present (for user messages with images)
   // Prioritize DB fields for URL, then fallback to local data for preview
@@ -55,6 +79,67 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg" // Apply gradient to a wrapper
     : "";
 
+  // Custom components for markdown rendering
+  const components = {
+    code: ({
+      inline,
+      className,
+      children,
+      ...props
+    }: {
+      inline?: boolean;
+      className?: string;
+      children?: React.ReactNode;
+    } & React.HTMLAttributes<HTMLElement>) => {
+      const match = /language-(\w+)/.exec(className || "");
+      const language = match ? match[1] : "";
+      const codeString = String(children).replace(/\n$/, "");
+      const blockId = `${message.id || "msg"}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
+      if (!inline) {
+        // Block code
+        return (
+          <div className="relative group/code">
+            <div className="flex items-center justify-between bg-gray-800 px-3 py-2 text-xs text-gray-300 rounded-t-md border-b border-gray-700">
+              <span>{language || "code"}</span>
+              <button
+                onClick={() => copyToClipboard(codeString, true, blockId)}
+                className="opacity-0 group-hover/code:opacity-100 transition-opacity flex items-center gap-1 hover:text-white"
+                title="Copy code"
+              >
+                {copiedCodeBlock === blockId ? (
+                  <>
+                    <CheckIcon size={14} />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <CopyIcon size={14} />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <pre className="bg-gray-900 p-3 rounded-b-md overflow-x-auto text-sm">
+              <code className={`${className} text-sm`} {...props}>
+                {children}
+              </code>
+            </pre>
+          </div>
+        );
+      } else {
+        // Inline code
+        return (
+          <code className={`${className} text-sm`} {...props}>
+            {children}
+          </code>
+        );
+      }
+    },
+  };
+
   return (
     <>
       <style jsx>{`
@@ -65,6 +150,12 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         .prose b {
           color: white !important; /* Force white bold text for dark mode app */
           font-weight: 600;
+        }
+        .prose code {
+          font-size: 0.875rem !important; /* Force 14px (text-sm) for code */
+        }
+        .prose pre {
+          font-size: 0.875rem !important; /* Force 14px (text-sm) for pre blocks */
         }
       `}</style>
       <div
@@ -86,7 +177,22 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           }`}
         >
           {/* Optional Gradient Border Wrapper for Pro Model */}
-          <div className={proBorderStyle}>
+          <div className={`${proBorderStyle} relative group/message`}>
+            {/* Copy Message Button - Absolute positioned in top-right */}
+            <button
+              onClick={() => copyToClipboard(message.content)}
+              className="absolute -top-2 -right-2 opacity-0 group-hover/message:opacity-100 transition-opacity p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow-lg z-10"
+              title="Copy message"
+            >
+              {isCopied ? (
+                <CheckIcon size={14} className="text-green-400" />
+              ) : (
+                <CopyIcon
+                  size={14}
+                  className="text-gray-300 hover:text-white"
+                />
+              )}
+            </button>
             <div
               className={`p-3 rounded-lg ${
                 isUser
@@ -113,6 +219,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
                     rehypePlugins={[rehypeKatex]}
+                    components={components}
                   >
                     {message.content}
                   </ReactMarkdown>
