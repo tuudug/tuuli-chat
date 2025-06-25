@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 import ChatHistoryList from "@/components/chat/ChatHistoryList";
 import UserProfileWidget from "@/components/user/UserProfileWidget";
+import SparksDisplay from "@/components/SparksDisplay"; // Import SparksDisplay
 
 export default function AppSidebar() {
   const params = useParams();
@@ -25,6 +26,7 @@ export default function AppSidebar() {
             className="w-auto h-10 max-w-[120px]"
             priority
           />
+          <SparksDisplay /> {/* Place SparksDisplay next to the logo */}
         </div>
       </div>
       <div className="px-3">

@@ -3,8 +3,6 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import SparksDisplay from "@/components/SparksDisplay";
-
 export default function UserProfileWidget() {
   const router = useRouter();
 
@@ -20,9 +18,6 @@ export default function UserProfileWidget() {
 
   return (
     <div className="sticky bottom-0 z-10 bg-bg-sidebar p-2 border-t border-border-primary">
-      <div className="flex items-center justify-between mb-2">
-        <SparksDisplay />
-      </div>
       <button
         onClick={handleLogout}
         className="w-full px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
