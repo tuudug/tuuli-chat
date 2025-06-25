@@ -1,4 +1,4 @@
-import { SparkBalance } from "@/lib/types";
+import { SparkBalance } from "@/types";
 
 export const fetchSparkBalance = async (): Promise<SparkBalance> => {
   const response = await fetch("/api/sparks/balance");

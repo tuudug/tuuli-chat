@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { calculateSparksCost } from "@/lib/sparks";
-import type { GeminiModelId } from "@/lib/types";
+import type { GeminiModelId } from "@/types";
 
 interface EstimateRequest {
   model_id: GeminiModelId;

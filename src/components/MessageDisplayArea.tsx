@@ -4,7 +4,7 @@ import { MessageSquareIcon } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import LoadingSpinner from "./LoadingSpinner";
 import TypingIndicator from "./TypingIndicator";
-import { Message, GeminiModelId } from "@/lib/types";
+import { Message, GeminiModelId } from "@/types";
 import NewChatSuggestions from "./chat/NewChatSuggestions";
 
 interface MessageDisplayAreaProps {

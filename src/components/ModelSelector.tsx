@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import {
   ChevronDownIcon,
   StarIcon,
@@ -10,8 +9,11 @@ import {
   ChevronRightIcon,
   BrainIcon,
   ZapIcon,
+  InfoIcon,
+  XIcon,
 } from "lucide-react";
-import { GeminiModelId, MODEL_DETAILS } from "@/lib/types";
+import GeminiIcon from "@/components/icons/GeminiIcon";
+import { GeminiModelId, MODEL_DETAILS } from "@/types";
 import { MODEL_MULTIPLIERS } from "@/lib/constants";
 
 interface ModelSelectorProps {
@@ -33,8 +35,21 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [showLegacyModels, setShowLegacyModels] = useState(false);
   const [hoveredModel, setHoveredModel] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [isMobile, setIsMobile] = useState(false);
+  const [modalModel, setModalModel] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Detect mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || "ontouchstart" in window);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -49,14 +64,15 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
       }
     };
 
-    if (isOpen) {
+    // Only close on outside click if the popover is open and the mobile info modal is not
+    if (isOpen && !modalModel) {
       document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, modalModel]);
 
   // Get current model details
   const currentModel = MODEL_DETAILS.find(
@@ -87,16 +103,24 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     onSetFavoriteModel(modelId);
   };
 
+  const handleInfoClick = (e: React.MouseEvent, modelId: string) => {
+    e.stopPropagation();
+    setModalModel(modelId);
+  };
+
   const handleMouseEnter = (modelId: string, event: React.MouseEvent) => {
+    if (isMobile) return; // Don't show hover tooltips on mobile
+
     const rect = event.currentTarget.getBoundingClientRect();
     setTooltipPosition({
-      x: rect.right + 8, // Position to the right of the model card
+      x: rect.right + 8,
       y: rect.top,
     });
     setHoveredModel(modelId);
   };
 
   const handleMouseLeave = () => {
+    if (isMobile) return; // Don't handle mouse leave on mobile
     setHoveredModel(null);
   };
 
@@ -160,6 +184,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     const isSelected = model.id === selectedModel;
     const isPro = model.performance === "Pro";
     const isFavorite = model.id === favoriteModel;
+    const tooltipContent = getModelTooltipContent(model);
 
     return (
       <div key={model.id} className="relative">
@@ -173,13 +198,15 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
               : "bg-gray-800/50 border-gray-700/50 hover:bg-gray-800/70 hover:border-gray-600/50 text-gray-200"
           }`}
         >
-          <div className="flex items-center justify-between pr-6">
+          <div
+            className={`flex items-center justify-between ${
+              isMobile ? "pr-16" : "pr-6"
+            }`}
+          >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2">
-                  <Image
-                    src="/gemini.svg"
-                    alt="Gemini"
+                  <GeminiIcon
                     width={16}
                     height={16}
                     className="flex-shrink-0"
@@ -251,6 +278,17 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
           </div>
         </button>
 
+        {/* Info Button for Mobile */}
+        {isMobile && tooltipContent && (
+          <button
+            onClick={(e) => handleInfoClick(e, model.id)}
+            className="absolute top-1/2 right-8 -translate-y-1/2 p-1 rounded-full transition-all duration-100 hover:scale-110 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10"
+            aria-label="Model information"
+          >
+            <InfoIcon size={12} />
+          </button>
+        )}
+
         {/* Favorite Star */}
         <button
           onClick={(e) => handleFavoriteClick(e, model.id)}
@@ -271,9 +309,130 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     );
   };
 
-  // Render tooltip using portal
+  // Render mobile modal
+  const renderMobileModal = () => {
+    if (!modalModel) return null;
+
+    const model = MODEL_DETAILS.find((m) => m.id === modalModel);
+    if (!model) return null;
+
+    const tooltipContent = getModelTooltipContent(model);
+    if (!tooltipContent) return null;
+
+    const multiplier = MODEL_MULTIPLIERS[model.id];
+
+    return createPortal(
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+        onClick={(e) => {
+          e.stopPropagation();
+          setModalModel(null);
+        }}
+      >
+        <div
+          className="bg-gray-900/95 backdrop-blur-sm border border-gray-600/50 rounded-xl shadow-xl w-full max-w-sm"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <tooltipContent.icon size={16} className="text-blue-400" />
+                <span className="font-medium text-white text-xs">
+                  {model.name}
+                </span>
+              </div>
+              <button
+                onClick={() => setModalModel(null)}
+                className="p-1 rounded-full hover:bg-gray-700/50 transition-colors"
+              >
+                <XIcon size={16} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-400">Sparks Cost:</span>
+                <div className="text-xs px-2 py-0.5 rounded font-medium bg-amber-500/20 text-amber-300">
+                  {formatMultiplier(multiplier)} sparks
+                </div>
+              </div>
+
+              {tooltipContent.bestFor && (
+                <div>
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">
+                    Best for:
+                  </h4>
+                  <div className="flex flex-wrap gap-1">
+                    {tooltipContent.bestFor.map((item, idx) => (
+                      <span
+                        key={idx}
+                        className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2">
+                  Use cases:
+                </h4>
+                <div className="space-y-1">
+                  {tooltipContent.useCases.map((useCase, idx) => (
+                    <div
+                      key={idx}
+                      className="text-xs text-gray-400 flex items-center gap-2"
+                    >
+                      <div className="w-1 h-1 bg-gray-500 rounded-full"></div>
+                      {useCase}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Capabilities */}
+              {(model.supportsFiles ||
+                model.supportsSearch ||
+                model.supportsFast) && (
+                <div className="pt-2 border-t border-gray-700/50">
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">
+                    Capabilities:
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {model.supportsFiles && (
+                      <div className="flex items-center gap-1">
+                        <FileImageIcon size={10} className="text-green-400" />
+                        <span className="text-xs text-green-400">Files</span>
+                      </div>
+                    )}
+                    {model.supportsSearch && (
+                      <div className="flex items-center gap-1">
+                        <SearchIcon size={10} className="text-blue-400" />
+                        <span className="text-xs text-blue-400">Search</span>
+                      </div>
+                    )}
+                    {model.supportsFast && (
+                      <div className="flex items-center gap-1">
+                        <ZapIcon size={10} className="text-purple-400" />
+                        <span className="text-xs text-purple-400">Fast</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
+  // Render tooltip using portal (desktop only)
   const renderTooltip = () => {
-    if (!hoveredModel || !isOpen) return null;
+    if (!hoveredModel || !isOpen || isMobile) return null;
 
     const model = MODEL_DETAILS.find((m) => m.id === hoveredModel);
     if (!model) return null;
@@ -437,13 +596,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
           className="inline-flex items-center justify-center rounded-lg text-xs h-[32px] px-3 gap-1.5 bg-gray-800/50 border border-gray-700/50 text-white hover:bg-gray-800/70 focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-75"
           aria-label="Select AI Model"
         >
-          <Image
-            src="/gemini.svg"
-            alt="Gemini"
-            width={14}
-            height={14}
-            className="flex-shrink-0"
-          />
+          <GeminiIcon width={14} height={14} className="flex-shrink-0" />
           <span className="font-medium whitespace-nowrap">
             {currentModel ? getModelDisplayName(currentModel) : "Select Model"}
           </span>
@@ -541,6 +694,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         {/* Render tooltip using portal */}
         {renderTooltip()}
       </div>
+
+      {/* Render mobile modal */}
+      {renderMobileModal()}
     </>
   );
 };

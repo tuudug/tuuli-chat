@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Zap, AlertTriangleIcon, MessageSquarePlus } from "lucide-react";
 import { estimateConversationCost, formatSparks } from "@/lib/sparks";
-import type { GeminiModelId } from "@/lib/types";
+import type { GeminiModelId } from "@/types";
 
 interface SparksCostIndicatorProps {
   messages: string[]; // Array of message content strings from the conversation

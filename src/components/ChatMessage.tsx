@@ -7,7 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { UserIcon, BotIcon } from "lucide-react";
-import { Message, MODEL_DETAILS } from "@/lib/types";
+import { Message, MODEL_DETAILS } from "@/types";
 import FinalSparksCost from "./FinalSparksCost";
 
 interface ChatMessageProps {
@@ -97,24 +97,12 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               {isUser ? (
                 <div className="text-sm">
                   {isImageAttachment && displayableImageSrc && (
-                    <div
-                      className="mb-2 relative"
-                      style={{
-                        width: "auto",
-                        height: "auto",
-                        maxWidth: "20rem",
-                        maxHeight: "16rem",
-                      }}
-                    >
-                      {" "}
-                      {/* Adjust wrapper for layout */}
+                    <div className="mb-2 relative w-full max-w-[20rem] aspect-[5/4]">
                       <Image
                         src={displayableImageSrc}
                         alt={imageName || "Uploaded image"}
-                        width={320} // max-w-xs is 20rem = 320px
-                        height={256} // max-h-64 is 16rem = 256px
-                        className="rounded-md" // Removed object-contain, as it's a prop
-                        style={{ objectFit: "contain" }} // Use style for object-fit
+                        fill
+                        className="rounded-md object-contain"
                       />
                     </div>
                   )}

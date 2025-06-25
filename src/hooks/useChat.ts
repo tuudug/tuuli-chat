@@ -8,7 +8,7 @@ import {
   GeminiModelId,
   DEFAULT_MODEL_ID,
   MODEL_DETAILS,
-} from "@/lib/types";
+} from "@/types";
 import { useSparks } from "@/contexts/SparksContext";
 import * as chatApi from "@/services/chatApi";
 import { useLocalStorage } from "./useLocalStorage";

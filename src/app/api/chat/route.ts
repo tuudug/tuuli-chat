@@ -10,7 +10,7 @@ import {
   MODEL_DETAILS,
   ResponseLengthSetting,
   type GeminiModelId,
-} from "@/lib/types";
+} from "@/types";
 import { estimateTokenCount, calculateSparksCost } from "@/lib/sparks";
 
 export const runtime = "edge";

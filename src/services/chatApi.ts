@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { GeminiModelId, Message } from "@/lib/types";
+import { GeminiModelId, Message } from "@/types";
 
 const supabase = createClient();
 

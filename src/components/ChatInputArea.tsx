@@ -5,7 +5,7 @@ import {
   PaperclipIcon, // Import PaperclipIcon
   XIcon, // Import XIcon for clearing selected file
 } from "lucide-react";
-import { GeminiModelId, MODEL_DETAILS } from "@/lib/types"; // Use new model types/constants
+import { GeminiModelId, MODEL_DETAILS } from "@/types"; // Use new model types/constants
 import ModelSelector from "./ModelSelector"; // Import the new ModelSelector
 import SparksCostIndicator from "./SparksCostIndicator";
 

@@ -6,7 +6,7 @@ import { useChat } from "@/hooks/useChat";
 import ChatHeader from "./ChatHeader";
 import ChatInputArea from "./ChatInputArea";
 import MessageDisplayArea from "./MessageDisplayArea";
-import { Message } from "@/lib/types";
+import { Message } from "@/types";
 
 interface ChatInterfaceProps {
   chatId: string;

@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { formatSparks } from "@/lib/sparks";
-import { SparkBalance, UserProfile } from "@/lib/types";
+import { SparkBalance, UserProfile } from "@/types";
 
 interface SparksDetailsPopoverProps {
   userProfile: UserProfile;

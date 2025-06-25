@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Zap, Crown, Gift, ChevronDown, ChevronRight } from "lucide-react";
 import { formatSparks } from "@/lib/sparks";
-import { SparkBalance } from "@/lib/types";
+import { SparkBalance } from "@/types";
 import { useSparks } from "@/contexts/SparksContext";
 import SparksDetailsPopover from "./user/SparksDetailsPopover";
 import * as sparksApi from "@/services/sparksApi";

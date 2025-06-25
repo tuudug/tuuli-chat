@@ -5,7 +5,7 @@ import {
 } from "@/lib/supabase/server"; // Use the existing server client and service role client
 import { MODEL_PRICES, DATE_RANGE_OPTIONS } from "@/lib/constants";
 import type { DateRangeValue } from "@/lib/constants";
-import type { GeminiModelId } from "@/lib/types";
+import type { GeminiModelId } from "@/types";
 
 export async function GET(request: Request) {
   const supabase = await createServer(); // Use the async createServer function
