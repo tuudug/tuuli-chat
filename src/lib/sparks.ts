@@ -1,5 +1,5 @@
 import { MODEL_MULTIPLIERS } from "./constants";
-import type { GeminiModelId } from "./types";
+import type { GeminiModelId } from "../types/models";
 
 /**
  * Calculate sparks cost for a message based on token usage

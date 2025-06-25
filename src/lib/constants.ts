@@ -1,4 +1,4 @@
-import type { GeminiModelId } from "./types";
+import type { GeminiModelId } from "../types/models";
 
 export const MODEL_PRICES: Record<
   GeminiModelId,
