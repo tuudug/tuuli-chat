@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useChat } from "@/hooks/useChat";
 import ChatHeader from "./ChatHeader";
 import ChatInputArea from "./ChatInputArea";
@@ -13,7 +12,6 @@ interface ChatInterfaceProps {
 }
 
 export default function ChatInterface({ chatId }: ChatInterfaceProps) {
-  const router = useRouter();
   const {
     messages,
     chatTitle,
@@ -29,8 +27,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     error,
     initialFetchLoading,
     isAwaitingFirstToken,
-    isNewChatFlow,
-    uiReadyForNewChat,
     sparksBalance,
     handleExampleQuestionClick,
     userAvatar,
@@ -60,8 +56,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     return () => {};
   }, []);
 
-  const showFullUI = !isNewChatFlow || uiReadyForNewChat;
-
   return (
     <div className="flex flex-col h-full" style={dynamicContainerStyle}>
       <ChatHeader
@@ -75,54 +69,31 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         }}
       />
 
-      {showFullUI ? (
-        <>
-          <MessageDisplayArea
-            messages={messages as unknown as Message[]}
-            chatId={chatId}
-            initialFetchLoading={initialFetchLoading}
-            initialMessagesError={error}
-            isAwaitingFirstToken={isAwaitingFirstToken}
-            isOverallLoading={isLoading}
-            responseError={error}
-            onExampleQuestionClick={handleExampleQuestionClick}
-            selectedModel={selectedModel}
-            userAvatar={userAvatar}
-          />
+      <MessageDisplayArea
+        messages={messages as unknown as Message[]}
+        chatId={chatId}
+        initialFetchLoading={initialFetchLoading}
+        initialMessagesError={error}
+        isAwaitingFirstToken={isAwaitingFirstToken}
+        isOverallLoading={isLoading}
+        responseError={error}
+        onExampleQuestionClick={handleExampleQuestionClick}
+        selectedModel={selectedModel}
+        userAvatar={userAvatar}
+      />
 
-          <ChatInputArea
-            input={input}
-            handleInputChange={handleInputChange}
-            handleFormSubmit={activeFormSubmitHandler}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
-            favoriteModel={favoriteModel}
-            onSetFavoriteModel={setFavoriteModel}
-            isWaitingForResponse={isLoading}
-            messages={messages.map((msg) => ({ content: msg.content }))}
-            userSparks={sparksBalance || 0}
-          />
-        </>
-      ) : (
-        <div className="flex-grow flex flex-col items-center justify-center p-4 text-center">
-          {error ? (
-            <div className="text-red-500 bg-red-100 p-4 rounded-md">
-              <h3 className="font-semibold text-lg mb-2">
-                Initialization Error
-              </h3>
-              <p>{error}</p>
-              <button
-                onClick={() => router.push("/chat/new")}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Try Again
-              </button>
-            </div>
-          ) : (
-            <div>Setting up new chat...</div>
-          )}
-        </div>
-      )}
+      <ChatInputArea
+        input={input}
+        handleInputChange={handleInputChange}
+        handleFormSubmit={activeFormSubmitHandler}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
+        favoriteModel={favoriteModel}
+        onSetFavoriteModel={setFavoriteModel}
+        isWaitingForResponse={isLoading}
+        messages={messages.map((msg) => ({ content: msg.content }))}
+        userSparks={sparksBalance || 0}
+      />
     </div>
   );
 }

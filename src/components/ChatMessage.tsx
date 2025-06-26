@@ -1,6 +1,6 @@
 "use client"; // Needs client-side libraries for rendering
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image"; // Import next/image
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -16,7 +16,44 @@ interface ChatMessageProps {
 }
 
 export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
+  const [animatedContent, setAnimatedContent] = useState(
+    message.isNew ? "" : message.content
+  );
+  const [isAnimating, setIsAnimating] = useState(
+    message.isNew && message.role === "assistant"
+  );
+  const animationStartedRef = useRef(false);
   const isUser = message.role === "user";
+
+  // Only start animation once when component mounts with isNew = true
+  useEffect(() => {
+    if (message.isNew && !isUser && !animationStartedRef.current) {
+      animationStartedRef.current = true;
+      setIsAnimating(true);
+      setAnimatedContent("");
+    }
+  }, []); // Empty dependency array - only run on mount
+
+  // Handle typewriter effect for new messages
+  useEffect(() => {
+    if (isAnimating && animatedContent.length < message.content.length) {
+      const timeoutId = setTimeout(() => {
+        setAnimatedContent(
+          message.content.substring(0, animatedContent.length + 1)
+        );
+      }, 1);
+      return () => clearTimeout(timeoutId);
+    } else if (
+      isAnimating &&
+      animatedContent.length >= message.content.length
+    ) {
+      // Animation completed
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 500); // Small delay before stopping animation
+    }
+  }, [animatedContent, isAnimating, message.content]);
+
   const isProModel =
     message.role === "assistant" && message.model_used === "gemini-2.5-pro";
 
@@ -44,8 +81,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
     }
   };
 
-  // Extract attachment data if present (for user messages with images)
-  // Prioritize DB fields for URL, then fallback to local data for preview
+  // Extract attachment data
   const imageUrl = message.attachment_url;
   const imageName = message.attachment_name;
   const imageType = message.attachment_type;
@@ -56,7 +92,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
   const isImageAttachment =
     isUser && imageType?.startsWith("image/") && displayableImageSrc;
 
-  // Get model identifier, preferring message.model_used, then fallback to message.data.ui_model_used
+  // Get model identifier
   const modelIdentifier = message.model_used || message.data?.ui_model_used;
 
   const modelName =
@@ -64,24 +100,46 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
       ? MODEL_DETAILS.find((m) => m.id === modelIdentifier)?.name
       : null;
 
-  // Use created_at, fallback to ui_created_at from message.data for immediate display
+  // Get timestamp
   const createdAtSource = message.created_at || message.data?.ui_created_at;
   const timestamp = createdAtSource
     ? new Date(createdAtSource).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : ""; // Display empty or a placeholder if no date is available
+    : "";
 
   const sparksCost = message.sparks_cost;
 
-  // Gradient border style for Pro model messages
+  // Gradient border style for Pro model
   const proBorderStyle = isProModel
-    ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg" // Apply gradient to a wrapper
+    ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
     : "";
+
+  // Custom component for animated text content - only for actively animating messages
+  const AnimatedText = ({ children }: { children: React.ReactNode }) => {
+    return <>{children}</>;
+  };
 
   // Custom components for markdown rendering
   const components = {
+    // Override paragraph to use animated text only for animating messages
+    p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
+      <p {...props}>
+        <AnimatedText>{children}</AnimatedText>
+      </p>
+    ),
+    // Override other text elements
+    strong: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
+      <strong {...props}>
+        <AnimatedText>{children}</AnimatedText>
+      </strong>
+    ),
+    em: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
+      <em {...props}>
+        <AnimatedText>{children}</AnimatedText>
+      </em>
+    ),
     code: ({
       inline,
       className,
@@ -100,20 +158,16 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
         .substr(2, 9)}`;
 
       if (!inline) {
-        // Block code
         if (!language) {
-          // Simple code block without language - just a small inline box
           return (
             <code
               className={`${className} inline-block bg-gray-800 px-1 mx-1 py-1 rounded text-xs border border-gray-700 whitespace-nowrap`}
               {...props}
             >
-              {children}
+              <AnimatedText>{children}</AnimatedText>
             </code>
           );
         }
-
-        // Code block with language - fancy version with header and copy button
         return (
           <div className="relative group/code w-full max-w-[calc(100vw-2rem)] sm:max-w-full">
             <div className="flex items-center justify-between bg-gray-800 px-3 py-2 text-xs text-gray-300 rounded-t-md border-b border-gray-700">
@@ -147,35 +201,37 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
           </div>
         );
       } else {
-        // Inline code
         return (
           <code className={`${className} text-sm`} {...props}>
-            {children}
+            <AnimatedText>{children}</AnimatedText>
           </code>
         );
       }
     },
   };
 
+  // Use the full content for non-animating messages, animated content for animating ones
+  const contentToRender = isAnimating ? animatedContent : message.content;
+
   return (
     <>
       <style jsx>{`
         .prose strong {
-          color: white !important; /* Force white bold text for dark mode app */
+          color: white !important;
           font-weight: 600;
         }
         .prose b {
-          color: white !important; /* Force white bold text for dark mode app */
+          color: white !important;
           font-weight: 600;
         }
         .prose code {
-          font-size: 0.875rem !important; /* Force 14px (text-sm) for code */
+          font-size: 0.875rem !important;
         }
         .prose pre {
-          font-size: 0.875rem !important; /* Force 14px (text-sm) for pre blocks */
+          font-size: 0.875rem !important;
         }
         .prose > * {
-          max-width: 100% !important; /* Ensure all prose elements respect container width */
+          max-width: 100% !important;
         }
         .prose table {
           width: 100% !important;
@@ -206,22 +262,17 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
           isUser ? "justify-end" : "justify-start"
         } px-2 sm:px-0`}
       >
-        {/* Assistant Avatar - Hidden on mobile */}
         {!isUser && (
           <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0">
             <BotIcon size={16} className="text-text-secondary" />
           </div>
         )}
-
-        {/* Message Bubble and Metadata */}
         <div
           className={`flex flex-col w-full max-w-[calc(100vw-1rem)] sm:max-w-[75%] ${
             isUser ? "items-end" : "items-start"
           }`}
         >
-          {/* Optional Gradient Border Wrapper for Pro Model */}
           <div className={`${proBorderStyle} relative group/message`}>
-            {/* Copy Message Button - Absolute positioned in top-right */}
             <button
               onClick={() => copyToClipboard(message.content)}
               className="absolute -top-2 -right-2 opacity-0 group-hover/message:opacity-100 transition-opacity p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow-lg z-10"
@@ -239,9 +290,9 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
             <div
               className={`p-3 rounded-lg max-w-[calc(100vw-1rem)] sm:max-w-full ${
                 isUser
-                  ? "bg-btn-primary text-text-primary rounded" // User style
-                  : "bg-bg-input text-text-primary rounded" // Assistant style
-              } ${isProModel ? "rounded-[7px]" : ""}`} // Slightly smaller radius inside border
+                  ? "bg-btn-primary text-text-primary rounded"
+                  : "bg-bg-input text-text-primary rounded"
+              } ${isProModel ? "rounded-[7px]" : ""}`}
             >
               {isUser ? (
                 <div className="text-sm">
@@ -264,23 +315,20 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
                     rehypePlugins={[rehypeKatex]}
                     components={components}
                   >
-                    {message.content}
+                    {contentToRender}
                   </ReactMarkdown>
                 </div>
               )}
             </div>
           </div>
-
-          {/* Metadata: Timestamp, Model Name, and Sparks Cost */}
           <div
             className={`flex items-center gap-2 text-xs mt-1 text-text-secondary ${
-              isUser ? "group-hover:opacity-100 opacity-0" : "opacity-100" // Keep hover for user
+              isUser ? "group-hover:opacity-100 opacity-0" : "opacity-100"
             } transition-opacity`}
           >
             {modelName && <span className="font-medium">{modelName}</span>}
             {modelName && timestamp && <span>•</span>}
             <span>{timestamp}</span>
-            {/* Render the final sparks cost for assistant messages */}
             {!isUser && sparksCost && sparksCost > 0 && (
               <>
                 <span>•</span>
@@ -289,8 +337,6 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
             )}
           </div>
         </div>
-
-        {/* User Avatar - Hidden on mobile */}
         {isUser && (
           <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0 overflow-hidden">
             {userAvatar ? (

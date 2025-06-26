@@ -29,7 +29,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   isOverallLoading,
   responseError,
   onExampleQuestionClick,
-  selectedModel,
+  selectedModel: _selectedModel,
   userAvatar,
 }) => {
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
@@ -102,33 +102,6 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
               {isAwaitingFirstToken && messages.length > 0 && (
                 <TypingIndicator />
               )}
-              {isOverallLoading &&
-                chatId === "new" &&
-                messages.length === 0 && (
-                  <div className="flex justify-start">
-                    <div
-                      className={`${
-                        selectedModel === "gemini-2.5-pro"
-                          ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
-                          : ""
-                      } animate-pulse`}
-                    >
-                      <div
-                        className={`p-3 rounded-lg bg-bg-input text-text-primary shadow-sm ${
-                          selectedModel === "gemini-2.5-pro"
-                            ? "rounded-[7px]"
-                            : ""
-                        }`}
-                      >
-                        <p className="text-xs text-text-secondary">
-                          {selectedModel === "gemini-2.5-pro"
-                            ? "Starting chat with Gemini 2.5 Pro (this may take a moment)..."
-                            : "Starting chat..."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
             </div>
           )}
 

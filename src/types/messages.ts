@@ -15,6 +15,7 @@ export type Message = {
   sparks_cost?: number | null; // Add sparks cost field
   estimated_input_tokens?: number | null;
   estimated_output_tokens?: number | null;
+  isNew?: boolean; // Client-side flag for new messages to animate
   data?: {
     ui_model_used?: string;
     ui_created_at?: string;

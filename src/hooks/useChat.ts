@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -38,103 +38,19 @@ export const useChat = (chatId: string) => {
 
   // Loading and Error States
   const [isLoading, setIsLoading] = useState(false);
-  const [isAwaitingFirstToken, setIsAwaitingFirstToken] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialFetchLoading, setInitialFetchLoading] = useState(false);
-  const [uiReadyForNewChatSetup, setUiReadyForNewChatSetup] = useState(false);
 
-  const handleStreamingResponse = useCallback(
-    async (
-      response: Response,
-      currentModel: GeminiModelId,
-      chatId: string,
-      messagesBeforeSubmit: Message[]
-    ) => {
-      if (!response.body) throw new Error("No response body");
+  // New state for handling new chat creation
+  const [pendingChatId, setPendingChatId] = useState<string | null>(null);
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let assistantResponse = "";
-      const assistantMessageId = uuidv4();
-      let isFirstChunk = true;
+  // Track the effective chat ID (once we create a chat, use that instead of "new")
+  const [effectiveChatId, setEffectiveChatId] = useState<string>(chatId);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-          created_at: new Date().toISOString(),
-          model_used: currentModel,
-        },
-      ]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        if (isFirstChunk) {
-          setIsAwaitingFirstToken(false);
-          isFirstChunk = false;
-        }
-
-        const rawChunk = decoder.decode(value);
-        const metadataSentinel = "\n\n[METADATA]";
-        if (rawChunk.includes(metadataSentinel)) {
-          const [contentPart, metadataPart] = rawChunk.split(metadataSentinel);
-          assistantResponse += contentPart;
-          try {
-            const metadata = JSON.parse(metadataPart);
-            if (metadata.type === "metadata") {
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? {
-                        ...msg,
-                        id: metadata.data.messageId,
-                        sparks_cost: metadata.data.sparksCost,
-                        content: assistantResponse,
-                      }
-                    : msg
-                )
-              );
-              if (typeof metadata.data.newBalance === "number") {
-                setSparksBalance(metadata.data.newBalance);
-              }
-            }
-          } catch (e) {
-            console.error("Failed to parse metadata JSON:", e);
-          }
-        } else {
-          assistantResponse += rawChunk;
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: assistantResponse }
-                : msg
-            )
-          );
-        }
-      }
-
-      // Title Generation for new chats
-      if (
-        messagesBeforeSubmit.length === 1 &&
-        messagesBeforeSubmit[0].role === "user"
-      ) {
-        const userPrompt = messagesBeforeSubmit[0].content;
-        // assistantResponse is the accumulated response from the stream
-        chatApi
-          .generateChatTitle(chatId, userPrompt, assistantResponse)
-          .then((newTitle) => {
-            if (newTitle) {
-              setChatTitle(newTitle);
-            }
-          });
-      }
-    },
-    [setSparksBalance, setChatTitle]
-  );
+  // Update effective chat ID when chatId prop changes
+  useEffect(() => {
+    setEffectiveChatId(chatId);
+  }, [chatId]);
 
   // Effect for fetching initial data for existing chats
   useEffect(() => {
@@ -145,16 +61,13 @@ export const useChat = (chatId: string) => {
         .then(({ title, messages: fetchedMessages }) => {
           setChatTitle(title);
           setMessages(fetchedMessages);
-
           const lastAssistantMessage = [...fetchedMessages]
             .reverse()
             .find((msg) => msg.role === "assistant" && msg.model_used);
-
-          const isValidModel = MODEL_DETAILS.some(
-            (detail) => detail.id === lastAssistantMessage?.model_used
-          );
-
-          if (lastAssistantMessage?.model_used && isValidModel) {
+          if (
+            lastAssistantMessage?.model_used &&
+            MODEL_DETAILS.some((d) => d.id === lastAssistantMessage.model_used)
+          ) {
             setSelectedModel(lastAssistantMessage.model_used as GeminiModelId);
           }
         })
@@ -172,10 +85,9 @@ export const useChat = (chatId: string) => {
       setChatTitle("New Conversation");
       setInput("");
       setError(null);
+      setPendingChatId(null);
       if (favoriteModel) {
         setSelectedModel(favoriteModel);
-      } else {
-        setSelectedModel("gemini-2.5-flash-lite-preview-06-17");
       }
     }
   }, [chatId, favoriteModel, isNewChatFlowFromParams]);
@@ -194,12 +106,7 @@ export const useChat = (chatId: string) => {
           const storedData = JSON.parse(storedDataString) as {
             message: string;
             model: GeminiModelId;
-            attachmentInfo?: {
-              url: string;
-              name: string;
-              type: string;
-              base64Content?: string;
-            };
+            attachmentInfo?: AttachmentApiData;
           };
 
           setChatTitle("New Conversation");
@@ -210,54 +117,55 @@ export const useChat = (chatId: string) => {
             role: "user",
             content: storedData.message,
             created_at: new Date().toISOString(),
-            attachment_name: storedData.attachmentInfo?.name,
-            attachment_type: storedData.attachmentInfo?.type,
-            attachment_preview: storedData.attachmentInfo?.base64Content,
+            attachment_name: storedData.attachmentInfo?.attachment_name,
+            attachment_type: storedData.attachmentInfo?.attachment_type,
+            attachment_preview: storedData.attachmentInfo?.attachment_content,
           };
 
           setMessages([userMessage]);
-          setUiReadyForNewChatSetup(true);
-          setIsAwaitingFirstToken(true);
           setIsLoading(true);
 
           chatApi
-            .streamChatResponse([userMessage], {
+            .sendChatMessage([userMessage], {
               modelId: storedData.model,
               chatId: chatId,
-              attachment_url: storedData.attachmentInfo?.url,
-              attachment_content: storedData.attachmentInfo?.base64Content,
-              attachment_name: storedData.attachmentInfo?.name,
-              attachment_type: storedData.attachmentInfo?.type,
+              ...storedData.attachmentInfo,
             })
-            .then((response) =>
-              handleStreamingResponse(response, storedData.model, chatId, [
-                userMessage,
-              ])
-            )
-            .catch((err) => {
-              setError(
-                err instanceof Error ? err.message : "An unknown error occurred"
-              );
+            .then(({ message: assistantMessage, newBalance }) => {
+              setMessages((prev) => [
+                ...prev,
+                { ...assistantMessage, isNew: true },
+              ]);
+              if (typeof newBalance === "number") {
+                setSparksBalance(newBalance);
+              }
+              if (userMessage.content) {
+                chatApi
+                  .generateChatTitle(
+                    chatId,
+                    userMessage.content,
+                    assistantMessage.content
+                  )
+                  .then((newTitle) => {
+                    if (newTitle) setChatTitle(newTitle);
+                  });
+              }
+            })
+            .catch((err: Error) => {
+              setError(err.message || "An unknown error occurred");
             })
             .finally(() => {
               setIsLoading(false);
-              setIsAwaitingFirstToken(false);
               sessionStorage.removeItem(storageKey);
               window.history.replaceState(null, "", `/chat/${chatId}`);
             });
-        } catch (parseError) {
+        } catch (_parseError) {
           setError("Failed to initialize new chat: corrupted session data.");
           sessionStorage.removeItem(storageKey);
-          setUiReadyForNewChatSetup(true);
         }
-      } else {
-        setError(
-          "Critical error: Could not retrieve initial chat data from session."
-        );
-        setUiReadyForNewChatSetup(true);
       }
     }
-  }, [chatId, isNewChatFlowFromParams, router, handleStreamingResponse]);
+  }, [chatId, isNewChatFlowFromParams, router, setSparksBalance]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -265,20 +173,99 @@ export const useChat = (chatId: string) => {
     setInput(e.target.value);
   };
 
-  const handleExistingChatSubmit = async (
+  const handleFormSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
     attachmentFile?: File | null
   ) => {
     e.preventDefault();
-    if (isLoading || isAwaitingFirstToken) return;
+    if (isLoading) return;
 
     const currentInput = input;
     if (!currentInput.trim() && !attachmentFile) return;
 
-    setError(null);
-    setIsAwaitingFirstToken(true);
     setIsLoading(true);
+    setError(null);
 
+    // Handle new chat creation - improved flow
+    if (effectiveChatId === "new") {
+      const newClientChatId = uuidv4();
+      setPendingChatId(newClientChatId);
+
+      // Create user message immediately and show it
+      const userMessage: Message = {
+        id: uuidv4(),
+        role: "user",
+        content: currentInput,
+        created_at: new Date().toISOString(),
+      };
+
+      try {
+        // Create chat shell first
+        await chatApi.createChatShell(newClientChatId, "New chat");
+
+        // Handle attachment if present
+        let attachmentInfo: AttachmentApiData | undefined = undefined;
+        if (attachmentFile) {
+          attachmentInfo = await chatApi.uploadAttachment(
+            attachmentFile,
+            newClientChatId
+          );
+          userMessage.attachment_name = attachmentInfo.attachment_name;
+          userMessage.attachment_type = attachmentInfo.attachment_type;
+          userMessage.attachment_preview = attachmentInfo.attachment_content;
+        }
+
+        // Show user message immediately
+        setMessages([userMessage]);
+        setInput("");
+
+        // Send to API and get response
+        const { message: assistantMessage, newBalance } =
+          await chatApi.sendChatMessage([userMessage], {
+            modelId: selectedModel,
+            chatId: newClientChatId,
+            ...attachmentInfo,
+          });
+
+        // Show assistant response
+        setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
+
+        if (typeof newBalance === "number") {
+          setSparksBalance(newBalance);
+        }
+
+        // Generate title in background
+        if (userMessage.content) {
+          chatApi
+            .generateChatTitle(
+              newClientChatId,
+              userMessage.content,
+              assistantMessage.content
+            )
+            .then((newTitle) => {
+              if (newTitle) setChatTitle(newTitle);
+            });
+        }
+
+        // Update the URL without navigating (no page reload)
+        window.history.replaceState(null, "", `/chat/${newClientChatId}`);
+
+        // Update our internal effective chat ID so subsequent messages go to this chat
+        setEffectiveChatId(newClientChatId);
+      } catch (error) {
+        setError(
+          error instanceof Error ? error.message : "Failed to create new chat."
+        );
+        // Reset state on error
+        setMessages([]);
+        setPendingChatId(null);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Handle existing chat message sending
     let attachmentDataForApi: Partial<AttachmentApiData> = {};
     const userMessage: Message = {
       id: uuidv4(),
@@ -291,22 +278,16 @@ export const useChat = (chatId: string) => {
       try {
         const attachmentData = await chatApi.uploadAttachment(
           attachmentFile,
-          chatId
+          effectiveChatId
         );
-        userMessage.attachment_name = attachmentData.name;
-        userMessage.attachment_type = attachmentData.type;
-        userMessage.attachment_preview = attachmentData.base64Content;
-        attachmentDataForApi = {
-          attachment_url: attachmentData.url,
-          attachment_content: attachmentData.base64Content,
-          attachment_name: attachmentData.name,
-          attachment_type: attachmentData.type,
-        };
+        userMessage.attachment_name = attachmentData.attachment_name;
+        userMessage.attachment_type = attachmentData.attachment_type;
+        userMessage.attachment_preview = attachmentData.attachment_content;
+        attachmentDataForApi = attachmentData;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to process attachment."
         );
-        setIsAwaitingFirstToken(false);
         setIsLoading(false);
         return;
       }
@@ -317,107 +298,50 @@ export const useChat = (chatId: string) => {
     setInput("");
 
     try {
-      const response = await chatApi.streamChatResponse(newMessages, {
-        modelId: selectedModel,
-        chatId: chatId,
-        ...attachmentDataForApi,
-      });
-      await handleStreamingResponse(
-        response,
-        selectedModel,
-        chatId,
-        newMessages
-      );
+      const { message: assistantMessage, newBalance } =
+        await chatApi.sendChatMessage(newMessages, {
+          modelId: selectedModel,
+          chatId: effectiveChatId,
+          ...attachmentDataForApi,
+        });
+
+      setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
+      if (typeof newBalance === "number") {
+        setSparksBalance(newBalance);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
       );
     } finally {
       setIsLoading(false);
-      setIsAwaitingFirstToken(false);
     }
   };
-
-  const handleNewChatSubmit = async (
-    e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null
-  ) => {
-    e.preventDefault();
-    if (isAwaitingFirstToken || isLoading) return;
-
-    const currentInputVal = input;
-    if (!currentInputVal.trim() && !attachmentFile) return;
-
-    setIsAwaitingFirstToken(true);
-    const newClientChatId = uuidv4();
-    const preliminaryTitle = "New chat";
-
-    try {
-      await chatApi.createChatShell(newClientChatId, preliminaryTitle);
-
-      let attachmentInfo:
-        | Awaited<ReturnType<typeof chatApi.uploadAttachment>>
-        | undefined = undefined;
-
-      if (attachmentFile) {
-        attachmentInfo = await chatApi.uploadAttachment(
-          attachmentFile,
-          newClientChatId
-        );
-      }
-
-      const dataToStore = {
-        message: currentInputVal,
-        model: selectedModel,
-        attachmentInfo: attachmentInfo,
-      };
-
-      sessionStorage.setItem(
-        `chat_init_${newClientChatId}`,
-        JSON.stringify(dataToStore)
-      );
-
-      setInput("");
-      router.push(`/chat/${newClientChatId}?newChat=true`);
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "Failed to initiate new chat."
-      );
-      setIsAwaitingFirstToken(false);
-    }
-  };
-
-  const activeFormSubmitHandler =
-    chatId === "new" ? handleNewChatSubmit : handleExistingChatSubmit;
 
   const handleExampleQuestionClick = (question: string) => {
     setInput(question);
   };
 
   return {
-    // State
     messages,
     chatTitle,
     input,
     selectedModel,
     favoriteModel,
-    userAvatar: user?.user_metadata.avatar_url,
-    // Loading & Error
-    isLoading: isLoading || isAwaitingFirstToken,
+    isLoading,
     initialFetchLoading,
-    isAwaitingFirstToken,
+    isAwaitingFirstToken: isLoading, // Simplified for sync flow
     error,
-    // Handlers
     setChatTitle,
     handleInputChange,
-    activeFormSubmitHandler,
+    activeFormSubmitHandler: handleFormSubmit,
     setSelectedModel,
     setFavoriteModel,
     handleExampleQuestionClick,
-    // New Chat Flow
     isNewChatFlow: isNewChatFlowFromParams,
-    uiReadyForNewChat: uiReadyForNewChatSetup,
-    // Sparks
+    uiReadyForNewChat: true, // Always show UI now
     sparksBalance,
+    userAvatar: user?.user_metadata.avatar_url,
+    pendingChatId, // Expose this for any UI needs
   };
 };

@@ -77,15 +77,15 @@ export const uploadAttachment = async (file: File, chatId: string) => {
   }
   const uploadedAttachment = await response.json();
   return {
-    url: uploadedAttachment.publicUrl as string,
-    name: uploadedAttachment.name as string,
-    type: uploadedAttachment.type as string,
-    base64Content: base64String,
+    attachment_url: uploadedAttachment.publicUrl as string,
+    attachment_name: uploadedAttachment.name as string,
+    attachment_type: uploadedAttachment.type as string,
+    attachment_content: base64String,
   };
 };
 
-// Sends messages to the core chat API and returns a streaming response
-export const streamChatResponse = (
+// Sends messages to the core chat API and returns a single message object
+export const sendChatMessage = async (
   messages: Message[],
   data: {
     modelId: GeminiModelId;
@@ -96,11 +96,17 @@ export const streamChatResponse = (
     attachment_type?: string;
   }
 ) => {
-  return fetch("/api/chat", {
+  const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, data }),
   });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to send message.");
+  }
+  return await response.json();
 };
 
 // Generates a title for a chat and returns the new title
