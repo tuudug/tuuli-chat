@@ -5,6 +5,7 @@ import Image from "next/image"; // Import next/image
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import remarkGfm from "remark-gfm";
 import "katex/dist/katex.min.css";
 import { UserIcon, BotIcon, CopyIcon, CheckIcon } from "lucide-react";
 import { Message, MODEL_DETAILS } from "@/types";
@@ -311,7 +312,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
               ) : (
                 <div className="prose prose-sm prose-invert max-w-none text-white w-full overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-full">
                   <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
+                    remarkPlugins={[remarkMath, remarkGfm]}
                     rehypePlugins={[rehypeKatex]}
                     components={components}
                   >
