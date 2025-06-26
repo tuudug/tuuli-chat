@@ -26,3 +26,13 @@
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 } */
+
+.prose th:not(:first-child),
+.prose td:not(:first-child) {
+  @apply border-l border-gray-300;
+}
+
+.prose-invert th,
+.prose-invert td {
+  @apply border-gray-600;
+}
