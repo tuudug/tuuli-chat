@@ -90,6 +90,7 @@ export const sendChatMessage = async (
   data: {
     modelId: GeminiModelId;
     chatId: string;
+    temperature: number;
     attachment_url?: string;
     attachment_content?: string;
     attachment_name?: string;

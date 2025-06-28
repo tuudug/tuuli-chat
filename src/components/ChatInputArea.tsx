@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowUpIcon,
   PaperclipIcon, // Import PaperclipIcon
@@ -14,6 +15,16 @@ import {
 import { GeminiModelId, MODEL_DETAILS } from "@/types"; // Use new model types/constants
 import ModelSelector from "./ModelSelector"; // Import the new ModelSelector
 import SparksCostIndicator from "./SparksCostIndicator";
+import TemperatureSlider from "./TemperatureSlider";
+
+// Custom hook to get the previous value of a prop or state
+function usePrevious(value: boolean) {
+  const ref = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref.current;
+}
 
 interface ChatInputAreaProps {
   input: string;
@@ -31,6 +42,8 @@ interface ChatInputAreaProps {
   userSparks?: number; // Add user sparks balance
   favoriteModel: GeminiModelId | null;
   onSetFavoriteModel: (modelId: GeminiModelId) => void;
+  temperature: number;
+  setTemperature: (temp: number) => void;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -44,11 +57,22 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   userSparks = 0,
   favoriteModel,
   onSetFavoriteModel,
+  temperature,
+  setTemperature,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
   const [dragCounter, setDragCounter] = useState(0); // To prevent flashing
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const wasWaitingForResponse = usePrevious(isWaitingForResponse);
+
+  useEffect(() => {
+    if (wasWaitingForResponse && !isWaitingForResponse) {
+      textareaRef.current?.focus();
+    }
+  }, [isWaitingForResponse, wasWaitingForResponse]);
 
   // Get current model details to check if it supports files
   const currentModel = MODEL_DETAILS.find(
@@ -226,10 +250,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </div>
           </div>
         )}
-        {/* Model Selector - Moved Above */}
-        <div className="mb-2 flex justify-start">
-          {" "}
-          {/* Added container and margin */}
+        {/* Model Selector and Controls */}
+        <motion.div
+          className="mb-2 flex items-center justify-between gap-4 flex-wrap"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
           <ModelSelector
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
@@ -237,7 +264,12 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             favoriteModel={favoriteModel}
             onSetFavoriteModel={onSetFavoriteModel}
           />
-        </div>
+          <TemperatureSlider
+            temperature={temperature}
+            setTemperature={setTemperature}
+            disabled={isWaitingForResponse}
+          />
+        </motion.div>
         {/* Input Row */}
         <div className="flex items-end gap-3">
           {/* File Input Button */}
@@ -269,6 +301,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           />
           {/* Text Input */}
           <TextareaAutosize
+            ref={textareaRef}
             value={input}
             onChange={handleInputChange}
             placeholder={
@@ -293,29 +326,49 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             />
           </div>
           {/* Send Button */}
-          <button
+          <motion.button
             type="submit"
             disabled={isWaitingForResponse || (!input.trim() && !selectedFile)} // Enable if input OR file is present
             className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             aria-label="Send message"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            animate={
+              isWaitingForResponse ? { scale: [1, 1.1, 1] } : { scale: 1 }
+            }
+            transition={
+              isWaitingForResponse
+                ? { duration: 1, repeat: Infinity, ease: "easeInOut" }
+                : { duration: 0.1 }
+            }
           >
             <ArrowUpIcon size={16} />
-          </button>
+          </motion.button>
         </div>
         {/* Selected File Preview */}
-        {selectedFile && (
-          <div className="mt-2 flex items-center justify-between text-xs text-gray-400 bg-gray-800/50 border border-gray-700/50 p-2 rounded">
-            <span className="truncate">Selected: {selectedFile.name}</span>
-            <button
-              type="button"
-              onClick={clearSelectedFile}
-              className="ml-2 text-gray-400 hover:text-gray-200"
-              aria-label="Clear selected file"
+        <AnimatePresence>
+          {selectedFile && (
+            <motion.div
+              className="mt-2 flex items-center justify-between text-xs text-gray-400 bg-gray-800/50 border border-gray-700/50 p-2 rounded"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
             >
-              <XIcon size={14} />
-            </button>
-          </div>
-        )}
+              <span className="truncate">Selected: {selectedFile.name}</span>
+              <motion.button
+                type="button"
+                onClick={clearSelectedFile}
+                className="ml-2 text-gray-400 hover:text-gray-200"
+                aria-label="Clear selected file"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <XIcon size={14} />
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </form>
     </div>
   );

@@ -33,6 +33,7 @@ export const useChat = (chatId: string) => {
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] =
     useState<GeminiModelId>(DEFAULT_MODEL_ID);
+  const [temperature, setTemperature] = useState<number>(0.9);
   const [favoriteModel, setFavoriteModel] =
     useLocalStorage<GeminiModelId | null>("favoriteModel", null);
 
@@ -130,6 +131,7 @@ export const useChat = (chatId: string) => {
             .sendChatMessage([userMessage], {
               modelId: storedData.model,
               chatId: chatId,
+              temperature: temperature,
               ...storedData.attachmentInfo,
             })
             .then(({ message: assistantMessage, newBalance }) => {
@@ -226,6 +228,7 @@ export const useChat = (chatId: string) => {
           await chatApi.sendChatMessage([userMessage], {
             modelId: selectedModel,
             chatId: newClientChatId,
+            temperature: temperature,
             ...attachmentInfo,
           });
 
@@ -305,6 +308,7 @@ export const useChat = (chatId: string) => {
         await chatApi.sendChatMessage(newMessages, {
           modelId: selectedModel,
           chatId: effectiveChatId,
+          temperature: temperature,
           ...attachmentDataForApi,
         });
 
@@ -330,6 +334,7 @@ export const useChat = (chatId: string) => {
     chatTitle,
     input,
     selectedModel,
+    temperature,
     favoriteModel,
     isLoading,
     initialFetchLoading,
@@ -339,6 +344,7 @@ export const useChat = (chatId: string) => {
     handleInputChange,
     activeFormSubmitHandler: handleFormSubmit,
     setSelectedModel,
+    setTemperature,
     setFavoriteModel,
     handleExampleQuestionClick,
     isNewChatFlow: isNewChatFlowFromParams,

@@ -53,6 +53,7 @@ interface ChatRequestBody {
     attachment_name?: string;
     attachment_type?: string;
     responseLength?: ResponseLengthSetting;
+    temperature?: number;
   };
 }
 
@@ -94,6 +95,7 @@ export async function POST(req: Request) {
   const { messages, data } = requestBody;
   const modelId = data?.modelId || "gemini-2.0-flash-lite";
   const responseLength = data?.responseLength || "brief";
+  const temperature = data?.temperature;
   const clientProvidedChatId = data?.chatId;
 
   if (!messages || messages.length === 0 || !clientProvidedChatId) {
@@ -151,6 +153,9 @@ export async function POST(req: Request) {
     ];
 
     const resultStream = await genAI.models.generateContentStream({
+      config: {
+        temperature: temperature || 0.9,
+      },
       model: modelId,
       contents: contentsForLlm,
     });

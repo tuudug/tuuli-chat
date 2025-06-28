@@ -8,6 +8,14 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  ComposedChart,
 } from "recharts";
 import * as Tabs from "@radix-ui/react-tabs";
 import { ReloadIcon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
@@ -16,6 +24,7 @@ import { createBrowserClient } from "@supabase/ssr"; // Updated import
 import type { Database } from "@/types/supabase";
 
 interface AnalyticsData {
+  // Original data
   totalPromptTokens: number;
   totalCompletionTokens: number;
   totalOverallTokens: number;
@@ -25,6 +34,44 @@ interface AnalyticsData {
   dateRange: string;
   startDate: string;
   fetchedMessagesCount: number;
+
+  // Enhanced data
+  totalCost: number;
+  totalSparksCost: number;
+  activeUsersCount: number;
+  avgCostPerMessage: number;
+  avgTokensPerMessage: number;
+  avgCostPerToken: number;
+  dailyCostTrend: {
+    date: string;
+    cost: number;
+    messages: number;
+    tokens: number;
+    activeUsers: number;
+  }[];
+  hourlyCostTrend: { hour: string; cost: number; messages: number }[];
+  modelEfficiencyData: {
+    name: string;
+    costPerToken: number;
+    costPerMessage: number;
+    avgTokensPerMessage: number;
+    totalCost: number;
+  }[];
+  dailySparksData: { date: string; sparks: number }[];
+  userAnalyticsData: {
+    userId: string;
+    totalCost: number;
+    messageCount: number;
+    avgCostPerMessage: number;
+    totalTokens: number;
+    avgTokensPerMessage: number;
+    mostUsedModel: string;
+    daysSinceFirst: number;
+    avgMessagesPerDay: number;
+    sparksCost: number;
+    firstMessageDate: string;
+    lastMessageDate: string;
+  }[];
 }
 
 // Dark mode appropriate colors for Recharts
@@ -266,6 +313,379 @@ const AnalyticsPage = () => {
 
       {analyticsData && !isLoading && !error && (
         <div>
+          {/* Key Metrics Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
+              <h3 className="text-sm font-medium text-gray-400">Total Cost</h3>
+              <p className="text-3xl font-semibold text-green-400">
+                ${analyticsData.totalCost.toFixed(4)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {analyticsData.totalSparksCost.toLocaleString()} sparks
+              </p>
+            </div>
+            <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
+              <h3 className="text-sm font-medium text-gray-400">
+                Avg Cost/Message
+              </h3>
+              <p className="text-3xl font-semibold text-blue-400">
+                ${analyticsData.avgCostPerMessage.toFixed(6)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {analyticsData.avgTokensPerMessage} tokens/msg
+              </p>
+            </div>
+            <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
+              <h3 className="text-sm font-medium text-gray-400">
+                Active Users
+              </h3>
+              <p className="text-3xl font-semibold text-purple-400">
+                {analyticsData.activeUsersCount}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {analyticsData.fetchedMessagesCount} messages
+              </p>
+            </div>
+            <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
+              <h3 className="text-sm font-medium text-gray-400">
+                Cost Efficiency
+              </h3>
+              <p className="text-3xl font-semibold text-yellow-400">
+                ${(analyticsData.avgCostPerToken * 1000).toFixed(6)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">per 1K tokens</p>
+            </div>
+          </div>
+
+          {/* Cost Trends */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div className="p-6 border border-gray-700 rounded-lg shadow-md bg-gray-800">
+              <h2 className="text-xl font-semibold mb-6 text-gray-200">
+                Daily Cost Trend
+              </h2>
+              {analyticsData.dailyCostTrend &&
+              analyticsData.dailyCostTrend.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={analyticsData.dailyCostTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#A0AEC0", fontSize: 12 }}
+                      tickFormatter={(value) =>
+                        new Date(value).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      }
+                    />
+                    <YAxis
+                      yAxisId="cost"
+                      orientation="left"
+                      tick={{ fill: "#A0AEC0", fontSize: 12 }}
+                    />
+                    <YAxis
+                      yAxisId="messages"
+                      orientation="right"
+                      tick={{ fill: "#A0AEC0", fontSize: 12 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#2D3748",
+                        borderColor: "#4A5568",
+                        color: "#E2E8F0",
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === "cost")
+                          return [`$${value.toFixed(6)}`, "Cost"];
+                        if (name === "messages") return [value, "Messages"];
+                        if (name === "activeUsers")
+                          return [value, "Active Users"];
+                        return [value, name];
+                      }}
+                      labelFormatter={(label) =>
+                        new Date(label).toLocaleDateString()
+                      }
+                    />
+                    <Area
+                      yAxisId="cost"
+                      type="monotone"
+                      dataKey="cost"
+                      fill="#3B82F6"
+                      fillOpacity={0.3}
+                      stroke="#3B82F6"
+                      strokeWidth={2}
+                    />
+                    <Bar
+                      yAxisId="messages"
+                      dataKey="messages"
+                      fill="#10B981"
+                      fillOpacity={0.7}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-gray-400">
+                  No trend data available for this period.
+                </p>
+              )}
+            </div>
+
+            <div className="p-6 border border-gray-700 rounded-lg shadow-md bg-gray-800">
+              <h2 className="text-xl font-semibold mb-6 text-gray-200">
+                Hourly Usage Pattern
+              </h2>
+              {analyticsData.hourlyCostTrend &&
+              analyticsData.hourlyCostTrend.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={analyticsData.hourlyCostTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
+                    <XAxis
+                      dataKey="hour"
+                      tick={{ fill: "#A0AEC0", fontSize: 11 }}
+                    />
+                    <YAxis tick={{ fill: "#A0AEC0", fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#2D3748",
+                        borderColor: "#4A5568",
+                        color: "#E2E8F0",
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === "cost")
+                          return [`$${value.toFixed(6)}`, "Cost"];
+                        return [value, "Messages"];
+                      }}
+                    />
+                    <Bar dataKey="cost" fill="#F59E0B" name="cost" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-gray-400">
+                  No hourly data available for this period.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Model Analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div className="p-6 border border-gray-700 rounded-lg shadow-md bg-gray-800">
+              <h2 className="text-xl font-semibold mb-6 text-gray-200">
+                Model Efficiency Analysis
+              </h2>
+              {analyticsData.modelEfficiencyData &&
+              analyticsData.modelEfficiencyData.length > 0 ? (
+                <div className="space-y-4">
+                  {analyticsData.modelEfficiencyData.map((model) => (
+                    <div
+                      key={model.name}
+                      className="p-4 bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-medium text-gray-200">
+                          {model.name}
+                        </h3>
+                        <span className="text-sm font-semibold text-green-400">
+                          ${model.totalCost.toFixed(4)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-400">Cost/Token:</span>
+                          <p className="text-blue-300">
+                            ${(model.costPerToken * 1000).toFixed(6)}/1K
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Cost/Message:</span>
+                          <p className="text-yellow-300">
+                            ${model.costPerMessage.toFixed(6)}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Avg Tokens:</span>
+                          <p className="text-purple-300">
+                            {model.avgTokensPerMessage}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400">
+                  No model efficiency data available.
+                </p>
+              )}
+            </div>
+
+            {renderPieChart(
+              analyticsData.modelUsageData,
+              "Model Usage Distribution"
+            )}
+          </div>
+
+          {/* User Analytics Table */}
+          {analyticsData.userAnalyticsData &&
+            analyticsData.userAnalyticsData.length > 0 && (
+              <div className="mb-8 p-6 border border-gray-700 rounded-lg shadow-md bg-gray-800">
+                <h2 className="text-xl font-semibold mb-6 text-gray-200">
+                  User Analytics
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-300">
+                    <thead className="text-xs text-gray-400 uppercase bg-gray-700">
+                      <tr>
+                        <th scope="col" className="px-4 py-3">
+                          User ID
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Total Cost
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Messages
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Avg Cost/Msg
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Total Tokens
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Avg Tokens/Msg
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Most Used Model
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Activity
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Sparks Cost
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analyticsData.userAnalyticsData
+                        .slice(0, 20)
+                        .map((user, index) => (
+                          <tr
+                            key={user.userId}
+                            className={
+                              index % 2 === 0 ? "bg-gray-800" : "bg-gray-700"
+                            }
+                          >
+                            <td className="px-4 py-3 font-medium text-gray-200">
+                              {user.userId}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-green-400 font-semibold">
+                                ${user.totalCost.toFixed(4)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {user.messageCount.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3">
+                              ${user.avgCostPerMessage.toFixed(6)}
+                            </td>
+                            <td className="px-4 py-3">
+                              {user.totalTokens.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3">
+                              {user.avgTokensPerMessage}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-1 text-xs font-medium bg-blue-900 text-blue-300 rounded">
+                                {user.mostUsedModel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-xs">
+                                <div className="text-purple-300">
+                                  {user.avgMessagesPerDay}/day
+                                </div>
+                                <div className="text-gray-500">
+                                  {user.daysSinceFirst} days
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-violet-400">
+                                {user.sparksCost.toLocaleString()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {analyticsData.userAnalyticsData.length > 20 && (
+                    <p className="mt-4 text-sm text-gray-500">
+                      Showing top 20 users out of{" "}
+                      {analyticsData.userAnalyticsData.length} total users
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+          {/* Cost Breakdown Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {renderPieChart(
+              analyticsData.priceByModelData,
+              "Cost Breakdown by Model"
+            )}
+            {renderPieChart(analyticsData.priceByUserData, "Top Users by Cost")}
+          </div>
+
+          {/* Sparks Analysis */}
+          {analyticsData.dailySparksData &&
+            analyticsData.dailySparksData.length > 0 && (
+              <div className="mb-8 p-6 border border-gray-700 rounded-lg shadow-md bg-gray-800">
+                <h2 className="text-xl font-semibold mb-6 text-gray-200">
+                  Daily Sparks Usage
+                </h2>
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={analyticsData.dailySparksData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#A0AEC0", fontSize: 12 }}
+                      tickFormatter={(value) =>
+                        new Date(value).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      }
+                    />
+                    <YAxis tick={{ fill: "#A0AEC0", fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#2D3748",
+                        borderColor: "#4A5568",
+                        color: "#E2E8F0",
+                      }}
+                      formatter={(value: number) => [
+                        value.toLocaleString(),
+                        "Sparks Spent",
+                      ]}
+                      labelFormatter={(label) =>
+                        new Date(label).toLocaleDateString()
+                      }
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="sparks"
+                      stroke="#8B5CF6"
+                      fill="#8B5CF6"
+                      fillOpacity={0.6}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+          {/* Token Analysis */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
               <h3 className="text-sm font-medium text-gray-400">
@@ -273,6 +693,14 @@ const AnalyticsPage = () => {
               </h3>
               <p className="text-3xl font-semibold text-gray-100">
                 {analyticsData.totalPromptTokens.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {(
+                  (analyticsData.totalPromptTokens /
+                    analyticsData.totalOverallTokens) *
+                  100
+                ).toFixed(1)}
+                % of total
               </p>
             </div>
             <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
@@ -282,6 +710,14 @@ const AnalyticsPage = () => {
               <p className="text-3xl font-semibold text-gray-100">
                 {analyticsData.totalCompletionTokens.toLocaleString()}
               </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {(
+                  (analyticsData.totalCompletionTokens /
+                    analyticsData.totalOverallTokens) *
+                  100
+                ).toFixed(1)}
+                % of total
+              </p>
             </div>
             <div className="p-6 bg-gray-800 rounded-lg shadow-md border border-gray-700">
               <h3 className="text-sm font-medium text-gray-400">
@@ -290,27 +726,14 @@ const AnalyticsPage = () => {
               <p className="text-3xl font-semibold text-gray-100">
                 {analyticsData.totalOverallTokens.toLocaleString()}
               </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {(analyticsData.totalOverallTokens / 1_000_000).toFixed(2)}M
+                tokens
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {renderPieChart(
-              analyticsData.modelUsageData,
-              "Model Usage Distribution"
-            )}
-            {renderPieChart(
-              analyticsData.priceByModelData,
-              "Price Breakdown by Model"
-            )}
-          </div>
-          <div className="mt-6">
-            {renderPieChart(
-              analyticsData.priceByUserData,
-              "Price Breakdown by User (UUIDs)"
-            )}
-          </div>
-
-          <footer className="mt-10 text-xs text-gray-500">
+          <footer className="mt-10 text-xs text-gray-500 space-y-1">
             <p>
               Data for range: {analyticsData.dateRange} (Starting from:{" "}
               {new Date(analyticsData.startDate).toLocaleDateString()})
@@ -318,6 +741,11 @@ const AnalyticsPage = () => {
             <p>
               Total assistant messages processed:{" "}
               {analyticsData.fetchedMessagesCount.toLocaleString()}
+            </p>
+            <p>
+              Average cost per 1K tokens: $
+              {(analyticsData.avgCostPerToken * 1000).toFixed(6)} | Average
+              tokens per message: {analyticsData.avgTokensPerMessage}
             </p>
           </footer>
         </div>

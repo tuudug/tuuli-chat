@@ -23,6 +23,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     setSelectedModel,
     favoriteModel,
     setFavoriteModel,
+    temperature,
+    setTemperature,
     isLoading,
     error,
     initialFetchLoading,
@@ -90,6 +92,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         setSelectedModel={setSelectedModel}
         favoriteModel={favoriteModel}
         onSetFavoriteModel={setFavoriteModel}
+        temperature={temperature}
+        setTemperature={setTemperature}
         isWaitingForResponse={isLoading}
         messages={messages.map((msg) => ({ content: msg.content }))}
         userSparks={sparksBalance || 0}

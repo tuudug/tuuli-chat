@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image"; // Import next/image
+import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -288,12 +289,15 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
                 />
               )}
             </button>
-            <div
+            <motion.div
               className={`p-3 rounded-lg max-w-[calc(100vw-1rem)] sm:max-w-full ${
                 isUser
                   ? "bg-btn-primary text-text-primary rounded"
                   : "bg-bg-input text-text-primary rounded"
               } ${isProModel ? "rounded-[7px]" : ""}`}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
               {isUser ? (
                 <div className="text-sm">
@@ -320,7 +324,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
                   </ReactMarkdown>
                 </div>
               )}
-            </div>
+            </motion.div>
           </div>
           <div
             className={`flex items-center gap-2 text-xs mt-1 text-text-secondary ${
