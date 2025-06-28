@@ -6,6 +6,7 @@ export type Message = {
   content: string;
   model_used?: string; // Optional: Track which model generated the response
   created_at: string;
+  timestamp: Date; // Add timestamp for casual chat
   attachment_url?: string | null; // From DB
   attachment_name?: string | null; // From DB
   attachment_type?: string | null; // From DB
@@ -16,9 +17,21 @@ export type Message = {
   estimated_input_tokens?: number | null;
   estimated_output_tokens?: number | null;
   isNew?: boolean; // Client-side flag for new messages to animate
+  isThread?: boolean; // For thread functionality
   data?: {
     ui_model_used?: string;
     ui_created_at?: string;
     [key: string]: unknown; // Use unknown instead of any for stricter typing
   };
+};
+
+// --- Thread Definitions for Casual Chat ---
+
+export type Thread = {
+  id: string;
+  title: string;
+  preview: string;
+  messageCount: number;
+  lastActivity: Date;
+  isActive: boolean;
 };
