@@ -24,6 +24,7 @@
     "@types/uuid": "^10.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "framer-motion": "^12.11.0",
     "katex": "^0.16.22",
     "lucide-react": "^0.509.0",

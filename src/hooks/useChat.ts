@@ -117,6 +117,7 @@ export const useChat = (chatId: string) => {
             role: "user",
             content: storedData.message,
             created_at: new Date().toISOString(),
+            timestamp: new Date(),
             attachment_name: storedData.attachmentInfo?.attachment_name,
             attachment_type: storedData.attachmentInfo?.attachment_type,
             attachment_preview: storedData.attachmentInfo?.attachment_content,
@@ -197,6 +198,7 @@ export const useChat = (chatId: string) => {
         role: "user",
         content: currentInput,
         created_at: new Date().toISOString(),
+        timestamp: new Date(),
       };
 
       try {
@@ -272,6 +274,7 @@ export const useChat = (chatId: string) => {
       role: "user",
       content: currentInput,
       created_at: new Date().toISOString(),
+      timestamp: new Date(),
     };
 
     if (attachmentFile) {
