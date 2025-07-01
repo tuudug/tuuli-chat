@@ -1,14 +1,15 @@
 "use client";
 
+"use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Tables } from "@/types/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { usePin } from "@/contexts/PinContext";
 
 const supabase = createClient();
 
-// A more robust state machine to manage the singleton subscription
-// and prevent race conditions from React Strict Mode's double-invokes.
 const subscriptionState: {
   channel: RealtimeChannel | null;
   status: "idle" | "subscribing" | "subscribed" | "error";
@@ -18,7 +19,6 @@ const subscriptionState: {
 };
 
 const setupSubscription = async () => {
-  // If we are already subscribed or in the process of subscribing, do nothing.
   if (
     subscriptionState.status === "subscribed" ||
     subscriptionState.status === "subscribing"
@@ -26,7 +26,6 @@ const setupSubscription = async () => {
     return;
   }
 
-  // Set status to 'subscribing' immediately to win the race condition.
   subscriptionState.status = "subscribing";
 
   try {
@@ -34,7 +33,6 @@ const setupSubscription = async () => {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      // If no user, reset to idle and exit.
       subscriptionState.status = "idle";
       return;
     }
@@ -80,7 +78,6 @@ const setupSubscription = async () => {
             supabase.removeChannel(subscriptionState.channel);
           }
           subscriptionState.channel = null;
-          // Reset to idle to allow a retry on the next component mount.
           subscriptionState.status = "idle";
         }
       });
@@ -97,25 +94,34 @@ export const useChatHistory = () => {
   const [chats, setChats] = useState<Tables<"chats">[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { isPinValidated, storedPin } = usePin();
 
   const fetchChats = useCallback(async () => {
+    if (!isPinValidated) {
+      setChats([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setChats([]);
-        return;
+      const response = await fetch("/api/chat/history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pin: storedPin }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch chat history");
       }
-      const { data, error: fetchError } = await supabase
-        .from("chats")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      if (fetchError) throw fetchError;
-      setChats(data || []);
+
+      const { chats: fetchedChats, error: fetchError } = await response.json();
+
+      if (fetchError) throw new Error(fetchError);
+      setChats(fetchedChats || []);
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "An unknown error occurred.";
@@ -124,7 +130,7 @@ export const useChatHistory = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isPinValidated, storedPin]);
 
   useEffect(() => {
     fetchChats();

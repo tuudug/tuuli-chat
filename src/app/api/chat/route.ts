@@ -1,15 +1,17 @@
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
-import { createServer as createSupabaseUserContextClient } from "@/lib/supabase/server";
-import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
-import type { Tables, TablesInsert } from "@/types/supabase";
+import { calculateSparksCost, estimateTokenCount } from "@/lib/sparks";
 import {
-  LIMITS,
+  createSupabaseServiceRoleClient,
+  createServer as createSupabaseUserContextClient,
+} from "@/lib/supabase/server";
+import {
   MODEL_DETAILS,
   ResponseLengthSetting,
   type GeminiModelId,
 } from "@/types";
-import { estimateTokenCount, calculateSparksCost } from "@/lib/sparks";
+import { ChatSettings } from "@/types/settings";
+import type { Tables } from "@/types/supabase";
+import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { NextResponse } from "next/server";
 
 export const runtime = "edge";
 
@@ -19,17 +21,52 @@ const genAI = new GoogleGenAI({
 
 const createSystemPrompt = (
   modelId: GeminiModelId,
-  responseLength: ResponseLengthSetting
+  settings: ChatSettings
 ): Content => {
   const modelInfo = MODEL_DETAILS.find((model) => model.id === modelId);
   const modelName = modelInfo?.name || modelId;
 
   let promptContent = `You are ${modelName}, a powerful AI language model.`;
 
-  if (responseLength === "detailed") {
-    promptContent += " Please provide comprehensive and detailed responses.";
+  // Response length instructions
+  if (settings.responseLength === "detailed") {
+    promptContent +=
+      " Please provide comprehensive and detailed responses with thorough explanations.";
   } else {
     promptContent += " Keep your responses concise and to the point.";
+  }
+
+  // Tone instructions
+  if (settings.tone === "casual") {
+    promptContent +=
+      " Use a friendly, conversational tone. Feel free to use contractions and informal language.";
+  } else {
+    promptContent +=
+      " Maintain a professional and formal tone in your responses.";
+  }
+
+  // Focus mode instructions
+  if (settings.focusMode === "creative") {
+    promptContent +=
+      " Prioritize creative, innovative, and imaginative approaches in your responses.";
+  } else if (settings.focusMode === "analytical") {
+    promptContent +=
+      " Focus on logical analysis, data-driven insights, and systematic problem-solving.";
+  } else {
+    promptContent +=
+      " Provide balanced responses that combine both analytical and creative thinking.";
+  }
+
+  // Explanation style instructions
+  if (settings.explanationStyle === "step-by-step") {
+    promptContent +=
+      " When explaining concepts, break them down into clear, sequential steps.";
+  } else if (settings.explanationStyle === "examples") {
+    promptContent +=
+      " Use concrete examples and practical illustrations to clarify your explanations.";
+  } else {
+    promptContent +=
+      " Provide direct, straightforward explanations without unnecessary elaboration.";
   }
 
   return {
@@ -52,6 +89,8 @@ interface ChatRequestBody {
     attachment_content?: string;
     attachment_name?: string;
     attachment_type?: string;
+    chatSettings?: ChatSettings;
+    // Keep for backward compatibility
     responseLength?: ResponseLengthSetting;
     temperature?: number;
   };
@@ -94,8 +133,16 @@ export async function POST(req: Request) {
 
   const { messages, data } = requestBody;
   const modelId = data?.modelId || "gemini-2.0-flash-lite";
-  const responseLength = data?.responseLength || "brief";
-  const temperature = data?.temperature;
+
+  // Use chatSettings if provided, otherwise fall back to individual settings for backward compatibility
+  const chatSettings = data?.chatSettings || {
+    temperature: data?.temperature || 0.9,
+    responseLength: data?.responseLength || "brief",
+    tone: "formal",
+    focusMode: "balanced",
+    explanationStyle: "direct",
+  };
+
   const clientProvidedChatId = data?.chatId;
 
   if (!messages || messages.length === 0 || !clientProvidedChatId) {
@@ -140,7 +187,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const systemPromptObject = createSystemPrompt(modelId, responseLength);
+    const systemPromptObject = createSystemPrompt(modelId, chatSettings);
     const systemPromptText =
       (systemPromptObject.parts?.[0] as Part)?.text || "";
     const contentsForLlm = [
@@ -154,7 +201,7 @@ export async function POST(req: Request) {
 
     const resultStream = await genAI.models.generateContentStream({
       config: {
-        temperature: temperature || 0.9,
+        temperature: chatSettings.temperature,
       },
       model: modelId,
       contents: contentsForLlm,

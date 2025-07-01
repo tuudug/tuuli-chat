@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { GeminiModelId, Message } from "@/types";
+import { ChatSettings } from "@/types/settings";
 
 const supabase = createClient();
 
@@ -90,7 +91,7 @@ export const sendChatMessage = async (
   data: {
     modelId: GeminiModelId;
     chatId: string;
-    temperature: number;
+    chatSettings: ChatSettings;
     attachment_url?: string;
     attachment_content?: string;
     attachment_name?: string;

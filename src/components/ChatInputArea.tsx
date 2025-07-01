@@ -7,15 +7,13 @@ import React, {
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ArrowUpIcon,
-  PaperclipIcon, // Import PaperclipIcon
-  XIcon, // Import XIcon for clearing selected file
-} from "lucide-react";
-import { GeminiModelId, MODEL_DETAILS } from "@/types"; // Use new model types/constants
-import ModelSelector from "./ModelSelector"; // Import the new ModelSelector
+import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { GeminiModelId, MODEL_DETAILS } from "@/types";
+import { ChatSettings } from "@/types/settings";
+import ModelSelector from "./ModelSelector";
 import SparksCostIndicator from "./SparksCostIndicator";
-import TemperatureSlider from "./TemperatureSlider";
+import AdvancedChatSettings from "./AdvancedChatSettings";
+import { usePin } from "@/contexts/PinContext";
 
 // Custom hook to get the previous value of a prop or state
 function usePrevious(value: boolean) {
@@ -42,8 +40,8 @@ interface ChatInputAreaProps {
   userSparks?: number; // Add user sparks balance
   favoriteModel: GeminiModelId | null;
   onSetFavoriteModel: (modelId: GeminiModelId) => void;
-  temperature: number;
-  setTemperature: (temp: number) => void;
+  chatSettings: ChatSettings;
+  setChatSettings: (settings: ChatSettings) => void;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -57,9 +55,10 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   userSparks = 0,
   favoriteModel,
   onSetFavoriteModel,
-  temperature,
-  setTemperature,
+  chatSettings,
+  setChatSettings,
 }) => {
+  const { isPinValidated } = usePin();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
   const [dragCounter, setDragCounter] = useState(0); // To prevent flashing
@@ -205,171 +204,177 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   return (
     <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full sm:mb-4">
-      {" "}
-      {/* Padding starts from sm breakpoint, sm:mb-4 for larger screens, mobile margin removed */}
-      <form
-        onSubmit={onFormSubmit}
-        onDragOver={handleFormDragOver}
-        onDrop={handleFormDrop}
-        className={`p-3 bg-gray-800/50 border rounded-xl focus-within:border-gray-600 transition-all duration-150 flex flex-col relative ${
-          isDragging
-            ? supportsFiles
-              ? "border-blue-500 bg-blue-500/10"
-              : "border-red-500 bg-red-500/10"
-            : "border-gray-700/50"
+      <div
+        className={`relative transition-opacity duration-300 ${
+          !isPinValidated ? "opacity-50 pointer-events-none" : "opacity-100"
         }`}
       >
-        {/* Drag and Drop Overlay */}
-        {isDragging && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-gray-900/80 rounded-xl">
-            <div className="text-center">
-              {supportsFiles ? (
-                <>
-                  <PaperclipIcon
-                    size={32}
-                    className="mx-auto mb-2 text-blue-400"
-                  />
-                  <p className="text-blue-400 font-medium">
-                    Drop here to attach file
-                  </p>
-                  <p className="text-gray-400 text-sm">
-                    Release to attach your file
-                  </p>
-                </>
-              ) : (
-                <>
-                  <XIcon size={32} className="mx-auto mb-2 text-red-400" />
-                  <p className="text-red-400 font-medium">
-                    This model doesn&apos;t support files
-                  </p>
-                  <p className="text-gray-400 text-sm">
-                    Choose a model that supports attachments
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-        {/* Model Selector and Controls */}
-        <motion.div
-          className="mb-2 flex items-center justify-between gap-4 flex-wrap"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
+        <form
+          onSubmit={onFormSubmit}
+          onDragOver={handleFormDragOver}
+          onDrop={handleFormDrop}
+          className={`p-3 bg-gray-800/50 border rounded-xl focus-within:border-gray-600 transition-all duration-150 flex flex-col relative ${
+            isDragging
+              ? supportsFiles
+                ? "border-blue-500 bg-blue-500/10"
+                : "border-red-500 bg-red-500/10"
+              : "border-gray-700/50"
+          }`}
         >
-          <ModelSelector
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
-            disabled={isWaitingForResponse}
-            favoriteModel={favoriteModel}
-            onSetFavoriteModel={onSetFavoriteModel}
-          />
-          <TemperatureSlider
-            temperature={temperature}
-            setTemperature={setTemperature}
-            disabled={isWaitingForResponse}
-          />
-        </motion.div>
-        {/* Input Row */}
-        <div className="flex items-end gap-3">
-          {/* File Input Button */}
-          <button
-            type="button"
-            onClick={triggerFileInput}
-            disabled={isWaitingForResponse || !supportsFiles}
-            className={`flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:cursor-not-allowed transition-colors ${
-              supportsFiles
-                ? "text-gray-400 hover:text-gray-200 disabled:opacity-50"
-                : "text-gray-600 cursor-not-allowed"
-            }`}
-            aria-label="Attach file"
-            title={
-              supportsFiles
-                ? "Attach file"
-                : "File attachments not supported by this model"
-            }
-          >
-            <PaperclipIcon size={16} />
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            // Consider adding 'accept' attribute e.g., accept="image/*,.pdf,.doc,.docx"
-            disabled={isWaitingForResponse || !supportsFiles}
-          />
-          {/* Text Input */}
-          <TextareaAutosize
-            ref={textareaRef}
-            value={input}
-            onChange={handleInputChange}
-            placeholder={
-              selectedFile
-                ? "Describe the attachment or ask a question..."
-                : "Type your message here..."
-            }
-            className="flex-1 bg-transparent resize-none focus:outline-none text-white placeholder:text-gray-400 text-sm py-2" // Added py-2 for vertical padding
-            minRows={1} // Start with 1 row
-            maxRows={6} // Grow up to 6 rows
-            rows={1} // Keep initial rows=1
-            disabled={isWaitingForResponse}
-            onKeyDown={handleKeyDown}
-          />
-          {/* Sparks Cost Indicator - Inline before send button */}
-          <div className="relative">
-            <SparksCostIndicator
-              messages={messageContents}
-              currentMessage={input}
-              selectedModel={selectedModel}
-              userSparks={userSparks}
-            />
-          </div>
-          {/* Send Button */}
-          <motion.button
-            type="submit"
-            disabled={isWaitingForResponse || (!input.trim() && !selectedFile)} // Enable if input OR file is present
-            className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            aria-label="Send message"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            animate={
-              isWaitingForResponse ? { scale: [1, 1.1, 1] } : { scale: 1 }
-            }
-            transition={
-              isWaitingForResponse
-                ? { duration: 1, repeat: Infinity, ease: "easeInOut" }
-                : { duration: 0.1 }
-            }
-          >
-            <ArrowUpIcon size={16} />
-          </motion.button>
-        </div>
-        {/* Selected File Preview */}
-        <AnimatePresence>
-          {selectedFile && (
-            <motion.div
-              className="mt-2 flex items-center justify-between text-xs text-gray-400 bg-gray-800/50 border border-gray-700/50 p-2 rounded"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <span className="truncate">Selected: {selectedFile.name}</span>
-              <motion.button
-                type="button"
-                onClick={clearSelectedFile}
-                className="ml-2 text-gray-400 hover:text-gray-200"
-                aria-label="Clear selected file"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <XIcon size={14} />
-              </motion.button>
-            </motion.div>
+          {/* Drag and Drop Overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-gray-900/80 rounded-xl">
+              <div className="text-center">
+                {supportsFiles ? (
+                  <>
+                    <PaperclipIcon
+                      size={32}
+                      className="mx-auto mb-2 text-blue-400"
+                    />
+                    <p className="text-blue-400 font-medium">
+                      Drop here to attach file
+                    </p>
+                    <p className="text-gray-400 text-sm">
+                      Release to attach your file
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <XIcon size={32} className="mx-auto mb-2 text-red-400" />
+                    <p className="text-red-400 font-medium">
+                      This model does not support files
+                    </p>
+                    <p className="text-gray-400 text-sm">
+                      Choose a model that supports attachments
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
           )}
-        </AnimatePresence>
-      </form>
+          {/* Model Selector and Controls */}
+          <motion.div
+            className="mb-2 flex items-center justify-between gap-4 flex-wrap"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ModelSelector
+              selectedModel={selectedModel}
+              setSelectedModel={setSelectedModel}
+              disabled={isWaitingForResponse}
+              favoriteModel={favoriteModel}
+              onSetFavoriteModel={onSetFavoriteModel}
+            />
+            <AdvancedChatSettings
+              settings={chatSettings}
+              onSettingsChange={setChatSettings}
+              disabled={isWaitingForResponse}
+            />
+          </motion.div>
+          {/* Input Row */}
+          <div className="flex items-end gap-3">
+            {/* File Input Button */}
+            <button
+              type="button"
+              onClick={triggerFileInput}
+              disabled={isWaitingForResponse || !supportsFiles}
+              className={`flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:cursor-not-allowed transition-colors ${
+                supportsFiles
+                  ? "text-gray-400 hover:text-gray-200 disabled:opacity-50"
+                  : "text-gray-600 cursor-not-allowed"
+              }`}
+              aria-label="Attach file"
+              title={
+                supportsFiles
+                  ? "Attach file"
+                  : "File attachments not supported by this model"
+              }
+            >
+              <PaperclipIcon size={16} />
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              // Consider adding 'accept' attribute e.g., accept="image/*,.pdf,.doc,.docx"
+              disabled={isWaitingForResponse || !supportsFiles}
+            />
+            {/* Text Input */}
+            <TextareaAutosize
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              placeholder={
+                selectedFile
+                  ? "Describe the attachment or ask a question..."
+                  : "Type your message here..."
+              }
+              className="flex-1 bg-transparent resize-none focus:outline-none text-white placeholder:text-gray-400 text-sm py-2" // Added py-2 for vertical padding
+              minRows={1} // Start with 1 row
+              maxRows={6} // Grow up to 6 rows
+              rows={1} // Keep initial rows=1
+              disabled={isWaitingForResponse}
+              onKeyDown={handleKeyDown}
+            />
+            {/* Sparks Cost Indicator - Inline before send button */}
+            <div className="relative">
+              <SparksCostIndicator
+                messages={messageContents}
+                currentMessage={input}
+                selectedModel={selectedModel}
+                userSparks={userSparks}
+              />
+            </div>
+            {/* Send Button */}
+            <motion.button
+              type="submit"
+              disabled={
+                isWaitingForResponse || (!input.trim() && !selectedFile)
+              } // Enable if input OR file is present
+              className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Send message"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              animate={
+                isWaitingForResponse ? { scale: [1, 1.1, 1] } : { scale: 1 }
+              }
+              transition={
+                isWaitingForResponse
+                  ? { duration: 1, repeat: Infinity, ease: "easeInOut" }
+                  : { duration: 0.1 }
+              }
+            >
+              <ArrowUpIcon size={16} />
+            </motion.button>
+          </div>
+          {/* Selected File Preview */}
+          <AnimatePresence>
+            {selectedFile && (
+              <motion.div
+                className="mt-2 flex items-center justify-between text-xs text-gray-400 bg-gray-800/50 border border-gray-700/50 p-2 rounded"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <span className="truncate">Selected: {selectedFile.name}</span>
+                <motion.button
+                  type="button"
+                  onClick={clearSelectedFile}
+                  className="ml-2 text-gray-400 hover:text-gray-200"
+                  aria-label="Clear selected file"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <XIcon size={14} />
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </form>
+      </div>
     </div>
   );
 };

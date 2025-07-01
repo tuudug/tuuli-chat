@@ -9,6 +9,7 @@ import {
   DEFAULT_MODEL_ID,
   MODEL_DETAILS,
 } from "@/types";
+import { ChatSettings, DEFAULT_CHAT_SETTINGS } from "@/types/settings";
 import { useSparks } from "@/contexts/SparksContext";
 import * as chatApi from "@/services/chatApi";
 import { useLocalStorage } from "./useLocalStorage";
@@ -33,7 +34,7 @@ export const useChat = (chatId: string) => {
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] =
     useState<GeminiModelId>(DEFAULT_MODEL_ID);
-  const [temperature, setTemperature] = useState<number>(0.9);
+  const [chatSettings, setChatSettings] = useState<ChatSettings>(DEFAULT_CHAT_SETTINGS);
   const [favoriteModel, setFavoriteModel] =
     useLocalStorage<GeminiModelId | null>("favoriteModel", null);
 
@@ -131,7 +132,7 @@ export const useChat = (chatId: string) => {
             .sendChatMessage([userMessage], {
               modelId: storedData.model,
               chatId: chatId,
-              temperature: temperature,
+              chatSettings: chatSettings,
               ...storedData.attachmentInfo,
             })
             .then(({ message: assistantMessage, newBalance }) => {
@@ -168,7 +169,7 @@ export const useChat = (chatId: string) => {
         }
       }
     }
-  }, [chatId, isNewChatFlowFromParams, router, setSparksBalance]);
+  }, [chatId, isNewChatFlowFromParams, router, setSparksBalance, chatSettings]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -228,7 +229,7 @@ export const useChat = (chatId: string) => {
           await chatApi.sendChatMessage([userMessage], {
             modelId: selectedModel,
             chatId: newClientChatId,
-            temperature: temperature,
+            chatSettings: chatSettings,
             ...attachmentInfo,
           });
 
@@ -308,7 +309,7 @@ export const useChat = (chatId: string) => {
         await chatApi.sendChatMessage(newMessages, {
           modelId: selectedModel,
           chatId: effectiveChatId,
-          temperature: temperature,
+          chatSettings: chatSettings,
           ...attachmentDataForApi,
         });
 
@@ -334,7 +335,7 @@ export const useChat = (chatId: string) => {
     chatTitle,
     input,
     selectedModel,
-    temperature,
+    chatSettings,
     favoriteModel,
     isLoading,
     initialFetchLoading,
@@ -344,7 +345,7 @@ export const useChat = (chatId: string) => {
     handleInputChange,
     activeFormSubmitHandler: handleFormSubmit,
     setSelectedModel,
-    setTemperature,
+    setChatSettings,
     setFavoriteModel,
     handleExampleQuestionClick,
     isNewChatFlow: isNewChatFlowFromParams,
