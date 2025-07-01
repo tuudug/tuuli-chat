@@ -79,17 +79,27 @@ const TemperatureSlider: React.FC<TemperatureSliderProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="relative w-20">
+          <div className="relative w-24 py-2 px-1">
             <input
               id="temperature"
               type="range"
               min="0"
               max="2"
-              step="0.1"
+              step="0.05"
               value={temperature}
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
+              onInput={(e) =>
+                setTemperature(parseFloat((e.target as HTMLInputElement).value))
+              }
               disabled={disabled}
-              className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 slider"
+              className="w-full h-4 appearance-none cursor-grab disabled:cursor-not-allowed disabled:opacity-50 slider"
+              style={{
+                background: "transparent",
+              }}
+            />
+            {/* Custom track background */}
+            <div
+              className="absolute top-1/2 left-1 right-1 h-3 -translate-y-1/2 pointer-events-none rounded-full"
               style={{
                 background: `linear-gradient(to right, 
                   rgb(59 130 246) 0%, 
@@ -114,40 +124,113 @@ const TemperatureSlider: React.FC<TemperatureSliderProps> = ({
       </motion.div>
 
       <style jsx>{`
-        .slider::-webkit-slider-thumb {
+        .slider {
+          -webkit-appearance: none;
           appearance: none;
-          width: 12px;
-          height: 12px;
+          background: transparent;
+          outline: none;
+          touch-action: manipulation;
+          user-select: none;
+        }
+
+        .slider::-webkit-slider-track {
+          height: 16px;
+          background: transparent;
+          border-radius: 8px;
+          border: none;
+          outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 20px;
+          height: 20px;
           border-radius: 50%;
           background: white;
-          cursor: pointer;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          cursor: grab;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.1);
           border: 2px solid #374151;
+          transition: all 0.15s ease;
+          position: relative;
+          z-index: 10;
         }
 
         .slider::-webkit-slider-thumb:hover {
           transform: scale(1.1);
-          box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+            0 0 0 1px rgba(0, 0, 0, 0.1);
+          border-color: #4b5563;
+        }
+
+        .slider::-webkit-slider-thumb:active {
+          cursor: grabbing;
+          transform: scale(1.15);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 0 2px #3b82f6;
+          border-color: #3b82f6;
+        }
+
+        /* Firefox styles */
+        .slider::-moz-range-track {
+          height: 16px;
+          background: transparent;
+          border-radius: 8px;
+          border: none;
+          outline: none;
         }
 
         .slider::-moz-range-thumb {
-          width: 12px;
-          height: 12px;
+          width: 20px;
+          height: 20px;
           border-radius: 50%;
           background: white;
-          cursor: pointer;
+          cursor: grab;
           border: 2px solid #374151;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          transition: all 0.15s ease;
+          -moz-appearance: none;
+          appearance: none;
+        }
+
+        .slider::-moz-range-thumb:hover {
+          transform: scale(1.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+          border-color: #4b5563;
+        }
+
+        .slider::-moz-range-thumb:active {
+          cursor: grabbing;
+          transform: scale(1.15);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+          border-color: #3b82f6;
         }
 
         .slider:disabled::-webkit-slider-thumb {
           background: #6b7280;
           cursor: not-allowed;
+          transform: none;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          border-color: #9ca3af;
         }
 
         .slider:disabled::-moz-range-thumb {
           background: #6b7280;
           cursor: not-allowed;
+          transform: none;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          border-color: #9ca3af;
+        }
+
+        .slider:focus {
+          outline: none;
+        }
+
+        .slider:focus::-webkit-slider-thumb {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px #3b82f6;
+        }
+
+        .slider:focus::-moz-range-thumb {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px #3b82f6;
         }
       `}</style>
     </Tooltip.Provider>

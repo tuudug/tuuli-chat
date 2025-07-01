@@ -126,7 +126,7 @@ const AdvancedChatSettings: React.FC<AdvancedChatSettingsProps> = ({
               onClick={() => setIsExpanded(false)}
             />
             <div
-              className="absolute bottom-full left-0 mb-2 w-80 z-50"
+              className="absolute bottom-full right-0 mb-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] z-50"
               style={{ animation: "slideInFromBottom 100ms ease-out" }}
             >
               <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl shadow-lg">
