@@ -38,15 +38,17 @@ const AppSidebarContent = () => {
     <div className="relative h-full flex flex-col bg-bg-sidebar text-text-primary space-y-4 overflow-hidden">
       <div className="pt-6 px-3">
         <div className="flex items-center justify-between">
-          <Image
-            src="/logo.png"
-            alt="Logo"
-            width={0}
-            height={0}
-            sizes="100vw"
-            className="w-auto h-10 max-w-[120px]"
-            priority
-          />
+          <Link href="/exp" className="relative group">
+            <Image
+              src="/logo.png"
+              alt="Logo"
+              width={0}
+              height={0}
+              sizes="100vw"
+              className="w-auto h-10 max-w-[120px] cursor-pointer hover:opacity-80 transition-opacity"
+              priority
+            />
+          </Link>
           <SparksDisplay />
         </div>
       </div>

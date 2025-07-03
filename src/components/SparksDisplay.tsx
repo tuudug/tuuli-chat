@@ -1,99 +1,34 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Zap, Crown, Gift, ChevronDown, ChevronRight } from "lucide-react";
 import { formatSparks } from "@/lib/sparks";
-import { SparkBalance } from "@/types";
 import { useSparks } from "@/contexts/SparksContext";
 import SparksDetailsPopover from "./user/SparksDetailsPopover";
-import * as sparksApi from "@/services/sparksApi";
 
 export default function SparksDisplay() {
   const {
     sparksBalance,
     isLoading: contextIsLoading,
-    setSparksBalance,
     userProfile,
+    claimDetails,
+    isClaimDetailsLoading,
+    claiming,
+    countdown,
+    showClaimAnimation,
+    handleClaimSparks,
   } = useSparks();
 
-  const [claimDetails, setClaimDetails] = useState<SparkBalance | null>(null);
-  const [isClaimDetailsLoading, setIsClaimDetailsLoading] = useState(true);
-  const [claiming, setClaiming] = useState(false);
-  const [countdown, setCountdown] = useState<string>("");
-  const [showClaimAnimation, setShowClaimAnimation] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const fetchClaimStatus = async () => {
-    try {
-      const data = await sparksApi.fetchSparkBalance();
-      setClaimDetails(data);
-    } catch (error) {
-      console.error("Error fetching spark claim status:", error);
-    } finally {
-      setIsClaimDetailsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (userProfile) {
-      fetchClaimStatus();
-    }
-  }, [userProfile]);
-
-  useEffect(() => {
-    if (!claimDetails) return;
-
-    const intervalId = setInterval(() => {
-      const now = new Date();
-      const nextReset = new Date(now);
-      nextReset.setUTCHours(24, 0, 0, 0);
-
-      const diff = nextReset.getTime() - now.getTime();
-      const totalSeconds = Math.max(0, Math.floor(diff / 1000));
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-      if (diff <= 0) {
-        setCountdown("Available!");
-        if (!claimDetails.can_claim_today) {
-          fetchClaimStatus();
-        }
-      } else {
-        setCountdown(`${hours}h ${minutes}m`);
-      }
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, [claimDetails]);
-
-  const handleClaimSparks = async () => {
-    if (!claimDetails?.can_claim_today || claiming) return;
-
-    setClaiming(true);
-    try {
-      const result = await sparksApi.claimDailySparks();
-      if (result.success) {
-        setShowClaimAnimation(true);
-        setTimeout(() => setShowClaimAnimation(false), 2000);
-        setSparksBalance(result.new_balance);
-        fetchClaimStatus();
-      }
-    } catch (error) {
-      console.error("Error claiming sparks:", error);
-    } finally {
-      setClaiming(false);
-    }
-  };
-
-  if (
-    contextIsLoading ||
-    isClaimDetailsLoading ||
-    !userProfile ||
-    !claimDetails
-  ) {
+  if (contextIsLoading || isClaimDetailsLoading || !userProfile) {
     return (
       <div className="w-full h-12 bg-gray-700/30 rounded-lg animate-pulse"></div>
     );
+  }
+
+  if (!claimDetails) {
+    return null;
   }
 
   return (
@@ -128,7 +63,7 @@ export default function SparksDisplay() {
               {formatSparks(sparksBalance ?? 0)}
             </span>
           </div>
-          {claimDetails.can_claim_today && (
+          {claimDetails?.can_claim_today && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

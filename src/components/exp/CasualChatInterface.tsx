@@ -57,12 +57,24 @@ const DEMO_THREADS: Thread[] = [
   },
 ];
 
-export default function CasualChatInterface() {
+interface CasualChatInterfaceProps {
+  showThreads?: boolean;
+}
+
+export default function CasualChatInterface({
+  showThreads: externalShowThreads,
+}: CasualChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES);
   const [threads] = useState<Thread[]>(DEMO_THREADS);
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [showThreads, setShowThreads] = useState(false);
+  const [internalShowThreads, setInternalShowThreads] = useState(false);
+
+  // Use external showThreads if provided, otherwise use internal state
+  const showThreads =
+    externalShowThreads !== undefined
+      ? externalShowThreads
+      : internalShowThreads;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -115,19 +127,25 @@ export default function CasualChatInterface() {
   };
 
   return (
-    <div className="flex h-full bg-bg-primary">
+    <div className="flex h-full">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <FriendlyHeader
-          onToggleThreads={() => setShowThreads(!showThreads)}
-          showThreads={showThreads}
-          threadCount={threads.length}
-        />
+      <div className="flex-1 flex flex-col h-full">
+        {/* Fixed Header */}
+        <div className="flex-shrink-0">
+          <FriendlyHeader
+            onToggleThreads={() => {
+              if (externalShowThreads === undefined) {
+                setInternalShowThreads(!internalShowThreads);
+              }
+            }}
+            showThreads={showThreads}
+            threadCount={threads.length}
+          />
+        </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 relative">
-          <ScrollArea className="h-full px-4 py-2 custom-scrollbar">
+        {/* Scrollable Messages Area */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full overflow-y-auto px-4 py-2 custom-scrollbar">
             <div className="space-y-4 pb-4 max-w-4xl mx-auto">
               <AnimatePresence>
                 {messages.map((message, index) => (
@@ -195,16 +213,18 @@ export default function CasualChatInterface() {
 
               <div ref={messagesEndRef} />
             </div>
-          </ScrollArea>
+          </div>
         </div>
 
-        {/* Input Area */}
-        <CasualInput
-          value={newMessage}
-          onChange={setNewMessage}
-          onSend={handleSendMessage}
-          disabled={isTyping}
-        />
+        {/* Fixed Input Area */}
+        <div className="flex-shrink-0">
+          <CasualInput
+            value={newMessage}
+            onChange={setNewMessage}
+            onSend={handleSendMessage}
+            disabled={isTyping}
+          />
+        </div>
       </div>
 
       {/* Threads Sidebar */}
