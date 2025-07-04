@@ -128,10 +128,7 @@ export default function ExpLayout({ children }: ExpLayoutProps) {
               <MenuIcon size={20} />
             </button>
 
-            {/* Render children (CasualChatInterface) */}
-            {React.cloneElement(children as React.ReactElement, {
-              showThreads,
-            })}
+            {children}
           </div>
         </div>
       </PinProvider>
