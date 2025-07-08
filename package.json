@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync:types": "supabase gen types typescript --project-id iacncoasiljzbhuuxawl > src/types/supabase.ts"
   },
   "dependencies": {
     "@google/genai": "^1.6.0",
@@ -51,6 +52,7 @@
     "autoprefixer": "^10.4.19",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
+    "supabase": "^2.30.4",
     "typescript": "^5"
   }
 }
