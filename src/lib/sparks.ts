@@ -11,7 +11,8 @@ import type { GeminiModelId } from "../types/models";
 export function calculateSparksCost(
   modelId: GeminiModelId,
   inputTokens: number,
-  outputTokens?: number
+  outputTokens?: number,
+  useSearch?: boolean
 ): number {
   // This function is now for client-side *estimation only*.
   // The authoritative calculation is done by the `calculate_sparks_cost` function in the database.
@@ -26,8 +27,12 @@ export function calculateSparksCost(
 
   const modelMultiplier = MODEL_MULTIPLIERS[modelId] || 0.1; // Default to cheapest multiplier
 
-  const estimatedCost =
+  let estimatedCost =
     (totalTokens / 1000) * BASE_SPARKS_PER_1K_TOKENS * modelMultiplier;
+
+  if (useSearch) {
+    estimatedCost *= 1.2; // 20% increase for search grounding
+  }
 
   // Ensure a minimum cost of 1 spark for display
   return Math.max(1, Math.ceil(estimatedCost));
@@ -55,7 +60,8 @@ export function estimateTokenCount(text: string): number {
 export function estimateConversationCost(
   messages: string[],
   currentMessage: string,
-  modelId: GeminiModelId
+  modelId: GeminiModelId,
+  useSearch?: boolean
 ): number {
   // Calculate total input tokens (all conversation history + current message)
   const allContent = [...messages, currentMessage].join(" ");
@@ -64,7 +70,7 @@ export function estimateConversationCost(
   // Estimate output tokens as equal to input tokens (conservative estimate)
   const outputTokens = inputTokens;
 
-  return calculateSparksCost(modelId, inputTokens, outputTokens);
+  return calculateSparksCost(modelId, inputTokens, outputTokens, useSearch);
 }
 
 /**

@@ -16,6 +16,7 @@ export type Message = {
   sparks_cost?: number | null; // Add sparks cost field
   estimated_input_tokens?: number | null;
   estimated_output_tokens?: number | null;
+  search_references?: { url: string; title: string }[] | null;
   isNew?: boolean; // Client-side flag for new messages to animate
   isThread?: boolean; // For thread functionality
   data?: {

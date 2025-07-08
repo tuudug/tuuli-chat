@@ -96,12 +96,13 @@ export const sendChatMessage = async (
     attachment_content?: string;
     attachment_name?: string;
     attachment_type?: string;
-  }
+  },
+  useSearch?: boolean
 ) => {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, data }),
+    body: JSON.stringify({ messages, data: { ...data, useSearch } }),
   });
 
   if (!response.ok) {

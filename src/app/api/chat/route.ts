@@ -90,6 +90,7 @@ interface ChatRequestBody {
     attachment_name?: string;
     attachment_type?: string;
     chatSettings?: ChatSettings;
+    useSearch?: boolean;
     // Keep for backward compatibility
     responseLength?: ResponseLengthSetting;
     temperature?: number;
@@ -158,7 +159,9 @@ export async function POST(req: Request) {
   const estimatedInputTokens = estimateTokenCount(allConversationContent);
   const estimatedSparksCost = calculateSparksCost(
     modelId,
-    estimatedInputTokens
+    estimatedInputTokens,
+    undefined,
+    data?.useSearch
   );
 
   if ((userProfile?.current_sparks || 0) < estimatedSparksCost) {
@@ -199,19 +202,45 @@ export async function POST(req: Request) {
       ...messagesForLlm,
     ];
 
+    const groundingTool = {
+      googleSearch: {},
+    };
+
     const resultStream = await genAI.models.generateContentStream({
       config: {
         temperature: chatSettings.temperature,
+        tools: data?.useSearch ? [groundingTool] : undefined,
       },
       model: modelId,
       contents: contentsForLlm,
     });
 
     let assistantResponseText = "";
+    let searchReferences: { url: string; title: string }[] = [];
     for await (const chunk of resultStream) {
-      const text = chunk.text;
-      if (typeof text === "string") {
+      const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
         assistantResponseText += text;
+      }
+
+      if (chunk.candidates?.[0]?.finishReason === "STOP") {
+        const groundingChunks =
+          chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (Array.isArray(groundingChunks)) {
+          searchReferences = groundingChunks
+            .map((refChunk) => {
+              if (refChunk.web && refChunk.web.uri && refChunk.web.title) {
+                return {
+                  url: refChunk.web.uri,
+                  title: refChunk.web.title,
+                };
+              }
+              return null;
+            })
+            .filter(
+              (ref): ref is { url: string; title: string } => ref !== null
+            );
+        }
       }
     }
     const completionTokens = estimateTokenCount(assistantResponseText);
@@ -240,6 +269,7 @@ export async function POST(req: Request) {
           role: "assistant",
           content: assistantResponseText,
           model_used: modelId,
+          search_references: searchReferences,
         })
         .select("id")
         .single();
@@ -271,6 +301,7 @@ export async function POST(req: Request) {
       created_at: new Date().toISOString(),
       model_used: modelId,
       sparks_cost: sparksResult?.sparks_spent,
+      search_references: searchReferences,
     };
 
     return NextResponse.json({

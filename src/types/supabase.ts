@@ -142,6 +142,7 @@ export type Database = {
           model_used: string | null
           prompt_tokens: number | null
           role: string
+          search_references: Json | null
           sparks_cost: number | null
           total_tokens: number | null
           usage_metadata: Json | null
@@ -161,6 +162,7 @@ export type Database = {
           model_used?: string | null
           prompt_tokens?: number | null
           role: string
+          search_references?: Json | null
           sparks_cost?: number | null
           total_tokens?: number | null
           usage_metadata?: Json | null
@@ -180,6 +182,7 @@ export type Database = {
           model_used?: string | null
           prompt_tokens?: number | null
           role?: string
+          search_references?: Json | null
           sparks_cost?: number | null
           total_tokens?: number | null
           usage_metadata?: Json | null
@@ -293,7 +296,14 @@ export type Database = {
     }
     Functions: {
       calculate_sparks_cost: {
-        Args: { model_id: string; input_tokens: number; output_tokens: number }
+        Args:
+          | { model_id: string; input_tokens: number; output_tokens: number }
+          | {
+              model_id: string
+              input_tokens: number
+              output_tokens: number
+              use_search: boolean
+            }
         Returns: number
       }
       claim_daily_sparks: {

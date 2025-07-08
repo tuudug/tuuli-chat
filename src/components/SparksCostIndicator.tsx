@@ -10,6 +10,7 @@ interface SparksCostIndicatorProps {
   currentMessage: string; // The current message being typed
   selectedModel: GeminiModelId;
   userSparks?: number; // Current user sparks balance
+  useSearch?: boolean;
 }
 
 export default function SparksCostIndicator({
@@ -17,14 +18,20 @@ export default function SparksCostIndicator({
   currentMessage,
   selectedModel,
   userSparks = 0,
+  useSearch = false,
 }: SparksCostIndicatorProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   // Calculate estimated cost
   const estimatedCost = useMemo(() => {
     if (!currentMessage.trim()) return 0;
-    return estimateConversationCost(messages, currentMessage, selectedModel);
-  }, [messages, currentMessage, selectedModel]);
+    return estimateConversationCost(
+      messages,
+      currentMessage,
+      selectedModel,
+      useSearch
+    );
+  }, [messages, currentMessage, selectedModel, useSearch]);
 
   // Show/hide based on whether user is typing
   useEffect(() => {

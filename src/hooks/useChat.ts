@@ -34,7 +34,9 @@ export const useChat = (chatId: string) => {
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] =
     useState<GeminiModelId>(DEFAULT_MODEL_ID);
-  const [chatSettings, setChatSettings] = useState<ChatSettings>(DEFAULT_CHAT_SETTINGS);
+  const [chatSettings, setChatSettings] = useState<ChatSettings>(
+    DEFAULT_CHAT_SETTINGS
+  );
   const [favoriteModel, setFavoriteModel] =
     useLocalStorage<GeminiModelId | null>("favoriteModel", null);
 
@@ -129,12 +131,16 @@ export const useChat = (chatId: string) => {
           setIsLoading(true);
 
           chatApi
-            .sendChatMessage([userMessage], {
-              modelId: storedData.model,
-              chatId: chatId,
-              chatSettings: chatSettings,
-              ...storedData.attachmentInfo,
-            })
+            .sendChatMessage(
+              [userMessage],
+              {
+                modelId: storedData.model,
+                chatId: chatId,
+                chatSettings: chatSettings,
+                ...storedData.attachmentInfo,
+              },
+              false
+            )
             .then(({ message: assistantMessage, newBalance }) => {
               setMessages((prev) => [
                 ...prev,
@@ -179,7 +185,8 @@ export const useChat = (chatId: string) => {
 
   const handleFormSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null
+    attachmentFile?: File | null,
+    useSearch?: boolean
   ) => {
     e.preventDefault();
     if (isLoading) return;
@@ -226,12 +233,16 @@ export const useChat = (chatId: string) => {
 
         // Send to API and get response
         const { message: assistantMessage, newBalance } =
-          await chatApi.sendChatMessage([userMessage], {
-            modelId: selectedModel,
-            chatId: newClientChatId,
-            chatSettings: chatSettings,
-            ...attachmentInfo,
-          });
+          await chatApi.sendChatMessage(
+            [userMessage],
+            {
+              modelId: selectedModel,
+              chatId: newClientChatId,
+              chatSettings: chatSettings,
+              ...attachmentInfo,
+            },
+            useSearch
+          );
 
         // Show assistant response
         setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
@@ -306,12 +317,16 @@ export const useChat = (chatId: string) => {
 
     try {
       const { message: assistantMessage, newBalance } =
-        await chatApi.sendChatMessage(newMessages, {
-          modelId: selectedModel,
-          chatId: effectiveChatId,
-          chatSettings: chatSettings,
-          ...attachmentDataForApi,
-        });
+        await chatApi.sendChatMessage(
+          newMessages,
+          {
+            modelId: selectedModel,
+            chatId: effectiveChatId,
+            chatSettings: chatSettings,
+            ...attachmentDataForApi,
+          },
+          useSearch
+        );
 
       setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
       if (typeof newBalance === "number") {

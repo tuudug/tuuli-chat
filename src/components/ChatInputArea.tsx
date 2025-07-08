@@ -7,7 +7,8 @@ import React, {
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, PaperclipIcon, XIcon, SearchIcon } from "lucide-react";
+import * as Switch from "@radix-ui/react-switch";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
 import { ChatSettings } from "@/types/settings";
 import ModelSelector from "./ModelSelector";
@@ -31,7 +32,8 @@ interface ChatInputAreaProps {
   ) => void;
   handleFormSubmit: (
     e: React.FormEvent<HTMLFormElement>,
-    attachment?: File | null
+    attachment?: File | null,
+    useSearch?: boolean
   ) => void; // Modified to accept optional attachment
   selectedModel: GeminiModelId; // Use GeminiModelId
   setSelectedModel: (model: GeminiModelId) => void; // Use GeminiModelId
@@ -59,6 +61,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   setChatSettings,
 }) => {
   const { isPinValidated } = usePin();
+  const [useSearch, setUseSearch] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
   const [dragCounter, setDragCounter] = useState(0); // To prevent flashing
@@ -78,6 +81,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     (model) => model.id === selectedModel
   );
   const supportsFiles = currentModel?.supportsFiles ?? false;
+  const supportsSearch = currentModel?.supportsSearch ?? false;
 
   // Document-level drag and drop handlers to detect dragging anywhere on the page
   useEffect(() => {
@@ -168,7 +172,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleFormSubmit(e, selectedFile);
+    handleFormSubmit(e, selectedFile, useSearch);
     // Clear input and file after submission is handled by the parent
     // setInput(""); // This should be handled by parent if input is controlled there
     if (!isWaitingForResponse) {
@@ -254,18 +258,39 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           )}
           {/* Model Selector and Controls */}
           <motion.div
-            className="mb-2 flex items-center justify-between gap-4 flex-wrap"
+            className="mb-2 flex items-center justify-between gap-4"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <ModelSelector
-              selectedModel={selectedModel}
-              setSelectedModel={setSelectedModel}
-              disabled={isWaitingForResponse}
-              favoriteModel={favoriteModel}
-              onSetFavoriteModel={onSetFavoriteModel}
-            />
+            <div className="flex items-center gap-4">
+              <ModelSelector
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                disabled={isWaitingForResponse}
+                favoriteModel={favoriteModel}
+                onSetFavoriteModel={onSetFavoriteModel}
+              />
+              {supportsSearch && (
+                <div className="flex items-center gap-2 bg-gray-800/40 px-2 py-1.5 rounded-md border border-gray-700/50">
+                  <SearchIcon size={12} className="text-gray-400" />
+                  <label
+                    htmlFor="search-toggle"
+                    className="text-xs text-gray-300 font-medium"
+                  >
+                    Search
+                  </label>
+                  <Switch.Root
+                    id="search-toggle"
+                    checked={useSearch}
+                    onCheckedChange={setUseSearch}
+                    className="w-[28px] h-[16px] bg-gray-700 rounded-full relative data-[state=checked]:bg-blue-600 outline-none cursor-pointer"
+                  >
+                    <Switch.Thumb className="block w-[12px] h-[12px] bg-white rounded-full shadow-sm transition-transform duration-100 translate-x-0.5 will-change-transform data-[state=checked]:translate-x-[14px]" />
+                  </Switch.Root>
+                </div>
+              )}
+            </div>
             <AdvancedChatSettings
               settings={chatSettings}
               onSettingsChange={setChatSettings}
@@ -325,6 +350,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 currentMessage={input}
                 selectedModel={selectedModel}
                 userSparks={userSparks}
+                useSearch={useSearch && supportsSearch}
               />
             </div>
             {/* Send Button */}

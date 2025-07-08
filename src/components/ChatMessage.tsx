@@ -11,6 +11,7 @@ import "katex/dist/katex.min.css";
 import { UserIcon, BotIcon, CopyIcon, CheckIcon } from "lucide-react";
 import { Message, MODEL_DETAILS } from "@/types";
 import FinalSparksCost from "./FinalSparksCost";
+import SearchReferences from "./chat/SearchReferences";
 
 interface ChatMessageProps {
   message: Message; // Expect our Message type
@@ -322,6 +323,9 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
                   >
                     {contentToRender}
                   </ReactMarkdown>
+                  {message.search_references && (
+                    <SearchReferences references={message.search_references} />
+                  )}
                 </div>
               )}
             </motion.div>
