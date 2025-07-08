@@ -370,3 +370,32 @@ export const useChat = (chatId: string) => {
     pendingChatId, // Expose this for any UI needs
   };
 };
+
+// Add this new hook for search status
+export const useSearchStatus = () => {
+  const [searchEnabled, setSearchEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSearchStatus = async () => {
+      try {
+        const response = await fetch("/api/search-status");
+        const data = await response.json();
+        setSearchEnabled(!data.is_disabled);
+      } catch (error) {
+        console.error("Failed to check search status:", error);
+        setSearchEnabled(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkSearchStatus();
+    // Check every 5 minutes
+    const interval = setInterval(checkSearchStatus, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return { searchEnabled, loading };
+};

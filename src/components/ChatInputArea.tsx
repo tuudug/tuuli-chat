@@ -7,13 +7,13 @@ import React, {
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUpIcon, PaperclipIcon, XIcon, SearchIcon } from "lucide-react";
-import * as Switch from "@radix-ui/react-switch";
+import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
 import { ChatSettings } from "@/types/settings";
 import ModelSelector from "./ModelSelector";
 import SparksCostIndicator from "./SparksCostIndicator";
 import AdvancedChatSettings from "./AdvancedChatSettings";
+import ToolsSelector from "./ToolsSelector";
 import { usePin } from "@/contexts/PinContext";
 
 // Custom hook to get the previous value of a prop or state
@@ -271,31 +271,20 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 favoriteModel={favoriteModel}
                 onSetFavoriteModel={onSetFavoriteModel}
               />
-              {supportsSearch && (
-                <div className="flex items-center gap-2 bg-gray-800/40 px-2 py-1.5 rounded-md border border-gray-700/50">
-                  <SearchIcon size={12} className="text-gray-400" />
-                  <label
-                    htmlFor="search-toggle"
-                    className="text-xs text-gray-300 font-medium"
-                  >
-                    Search
-                  </label>
-                  <Switch.Root
-                    id="search-toggle"
-                    checked={useSearch}
-                    onCheckedChange={setUseSearch}
-                    className="w-[28px] h-[16px] bg-gray-700 rounded-full relative data-[state=checked]:bg-blue-600 outline-none cursor-pointer"
-                  >
-                    <Switch.Thumb className="block w-[12px] h-[12px] bg-white rounded-full shadow-sm transition-transform duration-100 translate-x-0.5 will-change-transform data-[state=checked]:translate-x-[14px]" />
-                  </Switch.Root>
-                </div>
-              )}
             </div>
-            <AdvancedChatSettings
-              settings={chatSettings}
-              onSettingsChange={setChatSettings}
-              disabled={isWaitingForResponse}
-            />
+            <div className="flex items-center gap-2">
+              <ToolsSelector
+                useSearch={useSearch}
+                setUseSearch={setUseSearch}
+                supportsSearch={supportsSearch}
+                disabled={isWaitingForResponse}
+              />
+              <AdvancedChatSettings
+                settings={chatSettings}
+                onSettingsChange={setChatSettings}
+                disabled={isWaitingForResponse}
+              />
+            </div>
           </motion.div>
           {/* Input Row */}
           <div className="flex items-end gap-3">

@@ -153,6 +153,25 @@ export async function POST(req: Request) {
     );
   }
 
+  const today = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/Los_Angeles",
+  });
+
+  const { data: usageData, error: usageError } = await supabaseServiceAdmin
+    .from("grounding_api_usage")
+    .select("call_count, is_disabled")
+    .eq("date", today)
+    .single();
+
+  if (usageError && usageError.code !== "PGRST116") {
+    console.error("Error fetching search usage:", usageError);
+    // Potentially handle this error more gracefully
+  }
+
+  const isSearchDisabled =
+    usageData?.is_disabled || (usageData?.call_count || 0) >= 1450;
+  const useSearch = data?.useSearch && !isSearchDisabled;
+
   const lastUserMessage = messages[messages.length - 1];
   const userMessageContent = lastUserMessage.content || "";
   const allConversationContent = messages.map((m) => m.content).join(" ");
@@ -209,7 +228,7 @@ export async function POST(req: Request) {
     const resultStream = await genAI.models.generateContentStream({
       config: {
         temperature: chatSettings.temperature,
-        tools: data?.useSearch ? [groundingTool] : undefined,
+        tools: useSearch ? [groundingTool] : undefined,
       },
       model: modelId,
       contents: contentsForLlm,
@@ -276,6 +295,24 @@ export async function POST(req: Request) {
 
     if (shellError || !assistantMessageShell) {
       throw new Error("Failed to save assistant message.");
+    }
+
+    if (searchReferences.length > 0) {
+      const { data: newUsageData, error: newUsageError } =
+        await supabaseServiceAdmin
+          .from("grounding_api_usage")
+          .upsert(
+            {
+              date: today,
+              call_count: (usageData?.call_count || 0) + 1,
+              is_disabled: (usageData?.call_count || 0) + 1 >= 1450,
+            },
+            { onConflict: "date" }
+          )
+          .select();
+      if (newUsageError) {
+        console.error("Error updating search usage:", newUsageError);
+      }
     }
 
     const { data: sparksResult, error: sparksError } =
