@@ -1,7 +1,7 @@
 "use client";
 
 import SparksDisplay from "@/components/SparksDisplay";
-import UserProfileWidget from "@/components/user/UserProfileWidget";
+import { type ExpMessage } from "@/services/expApi";
 import {
   BarChart3,
   Bell,
@@ -130,12 +130,41 @@ const tools: Tool[] = [
 interface ConversationItemProps {
   isActive?: boolean;
   onClick?: () => void;
+  lastMessage?: ExpMessage;
 }
 
 const LunaConversationItem: React.FC<ConversationItemProps> = ({
   isActive = false,
   onClick,
+  lastMessage,
 }) => {
+  // Format the timestamp if we have a last message
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInMinutes = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60)
+    );
+
+    if (diffInMinutes < 1) return "now";
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Truncate message content for preview
+  const truncateMessage = (content: string, maxLength: number = 50) => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + "...";
+  };
+
+  const displayTime = lastMessage
+    ? formatTime(lastMessage.created_at)
+    : ".m ago";
+  const displayMessage = lastMessage
+    ? truncateMessage(lastMessage.content)
+    : "";
+
   return (
     <button
       onClick={onClick}
@@ -159,15 +188,17 @@ const LunaConversationItem: React.FC<ConversationItemProps> = ({
             Luna ✨
           </h3>
           <span className="text-xs text-text-secondary ml-2 flex-shrink-0">
-            2m ago
+            {displayTime}
           </span>
         </div>
         <div className="flex items-center justify-between mt-1">
           <p className="text-sm text-text-secondary truncate">
-            Hey there! 👋 I&apos;m Luna, your friendly AI companion...
+            {displayMessage}
           </p>
-          {/* Unread indicator */}
-          <div className="w-2 h-2 bg-text-accent rounded-full ml-2 flex-shrink-0"></div>
+          {/* Unread indicator - only show if there's a recent message */}
+          {lastMessage && (
+            <div className="w-2 h-2 bg-text-accent rounded-full ml-2 flex-shrink-0"></div>
+          )}
         </div>
       </div>
     </button>
@@ -234,11 +265,13 @@ const ToolItem: React.FC<ToolItemProps> = ({
 interface ToolsSidebarProps {
   selectedTool?: string;
   onToolSelect?: (toolId: string) => void;
+  lastLunaMessage?: ExpMessage;
 }
 
 export default function ToolsSidebar({
   selectedTool,
   onToolSelect,
+  lastLunaMessage,
 }: ToolsSidebarProps) {
   const handleToolClick = (toolId: string) => {
     onToolSelect?.(toolId);
@@ -279,6 +312,7 @@ export default function ToolsSidebar({
         <LunaConversationItem
           isActive={selectedTool === "luna"}
           onClick={handleLunaClick}
+          lastMessage={lastLunaMessage}
         />
       </div>
 

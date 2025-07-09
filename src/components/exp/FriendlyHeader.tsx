@@ -123,7 +123,7 @@ export default function FriendlyHeader({
               {currentTool.name}
               {selectedTool === "luna" && <span className="text-sm">✨</span>}
             </h1>
-            <p className="text-sm text-text-secondary flex items-center gap-1">
+            <div className="text-sm text-text-secondary flex items-center gap-1">
               {selectedTool === "luna" ? (
                 <>
                   <div className="w-2 h-2 bg-green-400 rounded-full" />
@@ -132,7 +132,7 @@ export default function FriendlyHeader({
               ) : (
                 currentTool.description
               )}
-            </p>
+            </div>
           </div>
         </div>
       </div>

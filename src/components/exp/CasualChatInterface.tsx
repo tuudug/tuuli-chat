@@ -2,39 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import FriendlyHeader from "./FriendlyHeader";
 import CasualMessage from "./CasualMessage";
 import CasualInput from "./CasualInput";
-import { Message, Thread } from "@/types/messages";
-
-const DEMO_MESSAGES: Message[] = [
-  {
-    id: "1",
-    content:
-      "Hey there! 👋 I'm Luna, your friendly AI companion. What's on your mind today?",
-    role: "assistant",
-    created_at: "2024-01-15T10:00:00",
-    timestamp: new Date("2024-01-15T10:00:00"),
-    isThread: false,
-  },
-  {
-    id: "2",
-    content: "Hi Luna! Just trying out this new chat experience 😊",
-    role: "user",
-    created_at: "2024-01-15T10:01:00",
-    timestamp: new Date("2024-01-15T10:01:00"),
-    isThread: false,
-  },
-  {
-    id: "3",
-    content:
-      "Awesome! I love the casual vibe already. This feels so much more natural than formal chat interfaces ✨",
-    role: "assistant",
-    created_at: "2024-01-15T10:01:30",
-    timestamp: new Date("2024-01-15T10:01:30"),
-    isThread: false,
-  },
-];
+import { Thread } from "@/types/messages";
+import { sendExpChatMessage, type ExpMessage } from "@/services/expApi";
 
 const DEMO_THREADS: Thread[] = [
   {
@@ -73,6 +44,10 @@ const DEMO_THREADS: Thread[] = [
 
 interface CasualChatInterfaceProps {
   selectedTool?: string;
+  messages: ExpMessage[];
+  onMessagesUpdate: (messages: ExpMessage[]) => void;
+  onLoadMore: () => void;
+  hasMore: boolean;
 }
 
 // Tool content placeholder component
@@ -233,59 +208,113 @@ const ThreadsContent = () => {
 
 export default function CasualChatInterface({
   selectedTool = "luna",
+  messages = [],
+  onMessagesUpdate,
+  onLoadMore,
+  hasMore,
 }: CasualChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>(DEMO_MESSAGES);
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messageCountRef = useRef<number>(messages.length);
+  const isNearBottomRef = useRef<boolean>(true);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const checkIfNearBottom = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return false;
+
+    const threshold = 100; // pixels from bottom
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  };
+
+  // Handle scroll events to track if user is near bottom
+  const handleScroll = () => {
+    isNearBottomRef.current = checkIfNearBottom();
+  };
+
+  // Only auto-scroll when new messages arrive AND user is near bottom
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const newMessageCount = messages.length;
+    const messagesAdded = newMessageCount > messageCountRef.current;
+
+    // Only scroll to bottom if:
+    // 1. New messages were added (not loaded from history)
+    // 2. User is near the bottom
+    // 3. We're not currently loading more messages
+    if (messagesAdded && isNearBottomRef.current && !isLoadingMore) {
+      scrollToBottom();
+    }
+
+    messageCountRef.current = newMessageCount;
+  }, [messages.length, isLoadingMore]);
 
   const handleSendMessage = async (content: string) => {
-    if (!content.trim()) return;
+    if (!content.trim() || isTyping) return;
 
-    // Add user message
-    const userMessage: Message = {
+    const userMessage: ExpMessage = {
       id: Date.now().toString(),
       content,
       role: "user",
       created_at: new Date().toISOString(),
-      timestamp: new Date(),
-      isThread: false,
+      user_id: "temp-user",
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    onMessagesUpdate(updatedMessages);
     setNewMessage("");
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = [
-        "That's really interesting! Tell me more about that 🤔",
-        "I love how you think about things! ✨",
-        "Hmm, let me think about this for a second... 💭",
-        "Oh that reminds me of something cool! 🎯",
-        "You always ask the best questions! 😊",
-      ];
+    // User is sending a message, so they should be at bottom
+    isNearBottomRef.current = true;
 
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: responses[Math.floor(Math.random() * responses.length)],
-        role: "assistant",
-        created_at: new Date().toISOString(),
-        timestamp: new Date(),
-        isThread: false,
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
+    try {
+      const result = await sendExpChatMessage(updatedMessages);
+      if (result.message) {
+        onMessagesUpdate([...updatedMessages, result.message as ExpMessage]);
+      }
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      onMessagesUpdate(messages);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 2000);
+    }
+  };
+
+  const loadMoreMessages = async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Store the current scroll position relative to the top
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+
+    setIsLoadingMore(true);
+
+    try {
+      await onLoadMore();
+
+      // After messages are loaded, restore scroll position
+      setTimeout(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight;
+          const heightDifference = newScrollHeight - scrollHeight;
+          container.scrollTop = scrollTop + heightDifference;
+        }
+        setIsLoadingMore(false);
+      }, 0);
+    } catch (error) {
+      console.error("Failed to load more messages:", error);
+      setIsLoadingMore(false);
+    }
   };
 
   // Show threads content
@@ -303,8 +332,23 @@ export default function CasualChatInterface({
     <div className="flex-1 flex flex-col h-full">
       {/* Scrollable Messages Area */}
       <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto px-4 py-2 custom-scrollbar">
+        <div
+          ref={scrollContainerRef}
+          className="h-full overflow-y-auto px-4 py-2 custom-scrollbar"
+          onScroll={handleScroll}
+        >
           <div className="space-y-4 pb-4 max-w-4xl mx-auto">
+            {hasMore && (
+              <div className="text-center">
+                <button
+                  onClick={loadMoreMessages}
+                  disabled={isLoadingMore}
+                  className="text-sm text-text-accent hover:underline disabled:opacity-50"
+                >
+                  {isLoadingMore ? "Loading..." : "Load More"}
+                </button>
+              </div>
+            )}
             <AnimatePresence>
               {messages.map((message, index) => (
                 <motion.div
@@ -317,7 +361,13 @@ export default function CasualChatInterface({
                     delay: index * 0.02,
                   }}
                 >
-                  <CasualMessage message={message} />
+                  <CasualMessage
+                    message={{
+                      ...message,
+                      timestamp: new Date(message.created_at),
+                      isThread: false,
+                    }}
+                  />
                 </motion.div>
               ))}
             </AnimatePresence>

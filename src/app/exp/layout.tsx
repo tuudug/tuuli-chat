@@ -1,17 +1,40 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ToolsSidebar from "@/components/exp/ToolsSidebar";
 import CasualChatInterface from "@/components/exp/CasualChatInterface";
 import { motion, AnimatePresence } from "framer-motion";
-import { MenuIcon } from "lucide-react";
 import { SparksProvider } from "@/contexts/SparksContext";
 import { PinProvider } from "@/contexts/PinContext";
 import PinModal from "@/components/dialogs/PinModal";
 import FriendlyHeader from "@/components/exp/FriendlyHeader";
+import { type ExpMessage, fetchExpChatHistory } from "@/services/expApi";
 
 export default function ExpLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open on desktop
   const [selectedTool, setSelectedTool] = useState<string>("luna"); // Default to Luna being selected
+  const [messages, setMessages] = useState<ExpMessage[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null | undefined>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const loadInitialMessages = async () => {
+    try {
+      const { messages: initialMessages, nextCursor: initialCursor } =
+        await fetchExpChatHistory(null, 20); // Load more initial messages
+      setMessages(initialMessages as ExpMessage[]);
+      setNextCursor(initialCursor);
+      setHasMore(!!initialCursor);
+    } catch (error) {
+      console.error("Failed to load chat history:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadInitialMessages();
+  }, []);
+
+  const lastLunaMessage = messages
+    .filter((msg) => msg.role === "assistant")
+    .slice(-1)[0];
 
   // Mobile variant: Slides in/out
   const mobileSidebarVariants = {
@@ -53,6 +76,24 @@ export default function ExpLayout() {
     setSelectedTool(toolId);
   };
 
+  const handleMessagesUpdate = (newMessages: ExpMessage[]) => {
+    setMessages(newMessages);
+  };
+
+  const handleLoadMore = async () => {
+    if (!hasMore || !nextCursor) return;
+    try {
+      const { messages: newMessages, nextCursor: newCursor } =
+        await fetchExpChatHistory(nextCursor, 10); // Load 10 more messages
+      // Prepend older messages at the beginning for display
+      setMessages((prev) => [...(newMessages as ExpMessage[]), ...prev]);
+      setNextCursor(newCursor);
+      setHasMore(!!newCursor);
+    } catch (error) {
+      console.error("Failed to load more messages:", error);
+    }
+  };
+
   return (
     <SparksProvider>
       <PinProvider>
@@ -74,6 +115,7 @@ export default function ExpLayout() {
                   <ToolsSidebar
                     selectedTool={selectedTool}
                     onToolSelect={handleToolSelect}
+                    lastLunaMessage={lastLunaMessage}
                   />
                 </div>
               </motion.div>
@@ -93,6 +135,7 @@ export default function ExpLayout() {
               <ToolsSidebar
                 selectedTool={selectedTool}
                 onToolSelect={handleToolSelect}
+                lastLunaMessage={lastLunaMessage}
               />
             </div>
           </motion.div>
@@ -112,15 +155,21 @@ export default function ExpLayout() {
           </AnimatePresence>
 
           {/* Main Content Area with horizontal padding on big screens */}
-          <div className="flex-1 flex flex-col bg-bg-primary h-screen overflow-y-auto relative">
+          <div className="flex-1 flex flex-col bg-bg-primary h-screen overflow-hidden relative">
             <FriendlyHeader
               isSidebarOpen={isSidebarOpen}
               setIsSidebarOpen={setIsSidebarOpen}
               selectedTool={selectedTool}
             />
             {/* Content with horizontal padding on big screens */}
-            <div className="flex-1">
-              <CasualChatInterface selectedTool={selectedTool} />
+            <div className="flex-1 overflow-hidden">
+              <CasualChatInterface
+                selectedTool={selectedTool}
+                messages={messages}
+                onMessagesUpdate={handleMessagesUpdate}
+                onLoadMore={handleLoadMore}
+                hasMore={hasMore}
+              />
             </div>
           </div>
         </div>
