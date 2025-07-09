@@ -59,7 +59,7 @@
 
 /* Custom scrollbar for better aesthetics */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -67,10 +67,17 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(139, 69, 19, 0.2);
-  border-radius: 3px;
+  background: rgba(68, 119, 206, 0.3);
+  border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 69, 19, 0.3);
+  background: rgba(68, 119, 206, 0.5);
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }

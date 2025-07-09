@@ -1,5 +1,3 @@
-import CasualChatInterface from "@/components/exp/CasualChatInterface";
-
 export default function ExpPage() {
-  return <CasualChatInterface />;
+  return null; // Content is now handled by the layout
 }

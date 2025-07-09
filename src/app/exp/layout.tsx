@@ -1,19 +1,17 @@
 "use client";
 import React, { useState } from "react";
 import ToolsSidebar from "@/components/exp/ToolsSidebar";
+import CasualChatInterface from "@/components/exp/CasualChatInterface";
 import { motion, AnimatePresence } from "framer-motion";
 import { MenuIcon } from "lucide-react";
 import { SparksProvider } from "@/contexts/SparksContext";
 import { PinProvider } from "@/contexts/PinContext";
 import PinModal from "@/components/dialogs/PinModal";
+import FriendlyHeader from "@/components/exp/FriendlyHeader";
 
-interface ExpLayoutProps {
-  children: React.ReactNode;
-}
-
-export default function ExpLayout({ children }: ExpLayoutProps) {
+export default function ExpLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open on desktop
-  const [showThreads, setShowThreads] = useState(false);
+  const [selectedTool, setSelectedTool] = useState<string>("luna"); // Default to Luna being selected
 
   // Mobile variant: Slides in/out
   const mobileSidebarVariants = {
@@ -30,7 +28,7 @@ export default function ExpLayout({ children }: ExpLayoutProps) {
   // Desktop variant: Animates width and opacity
   const desktopSidebarVariants = {
     open: {
-      width: "18rem", // w-72
+      width: "20rem", // w-80 - increased from w-72
       opacity: 1,
       transition: {
         type: "spring" as const,
@@ -51,6 +49,10 @@ export default function ExpLayout({ children }: ExpLayoutProps) {
     },
   };
 
+  const handleToolSelect = (toolId: string) => {
+    setSelectedTool(toolId);
+  };
+
   return (
     <SparksProvider>
       <PinProvider>
@@ -68,10 +70,10 @@ export default function ExpLayout({ children }: ExpLayoutProps) {
                 variants={desktopSidebarVariants}
               >
                 {/* Content container needs fixed width */}
-                <div className="h-full overflow-y-auto w-72">
+                <div className="h-full overflow-y-auto w-80 custom-scrollbar">
                   <ToolsSidebar
-                    showThreads={showThreads}
-                    onToggleThreads={() => setShowThreads(!showThreads)}
+                    selectedTool={selectedTool}
+                    onToolSelect={handleToolSelect}
                   />
                 </div>
               </motion.div>
@@ -81,16 +83,16 @@ export default function ExpLayout({ children }: ExpLayoutProps) {
           {/* Sidebar for Mobile (Overlay) */}
           <motion.div
             key="mobile-sidebar"
-            className="md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-bg-sidebar h-screen shadow-xl"
+            className="md:hidden fixed inset-y-0 left-0 z-50 w-80 bg-bg-sidebar h-screen shadow-xl"
             initial={false}
             animate={isSidebarOpen ? "open" : "closed"}
             variants={mobileSidebarVariants}
             style={{ pointerEvents: isSidebarOpen ? "auto" : "none" }}
           >
-            <div className="h-full overflow-y-auto">
+            <div className="h-full overflow-y-auto w-80 custom-scrollbar">
               <ToolsSidebar
-                showThreads={showThreads}
-                onToggleThreads={() => setShowThreads(!showThreads)}
+                selectedTool={selectedTool}
+                onToolSelect={handleToolSelect}
               />
             </div>
           </motion.div>
@@ -109,26 +111,17 @@ export default function ExpLayout({ children }: ExpLayoutProps) {
             )}
           </AnimatePresence>
 
-          {/* Main Content Area */}
+          {/* Main Content Area with horizontal padding on big screens */}
           <div className="flex-1 flex flex-col bg-bg-primary h-screen overflow-y-auto relative">
-            {/* Hamburger Menu Button - Mobile */}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="md:hidden fixed top-4 left-4 z-[60] p-2 bg-bg-sidebar rounded-md text-text-primary hover:bg-opacity-80"
-              aria-label="Toggle sidebar"
-            >
-              <MenuIcon size={24} />
-            </button>
-            {/* Toggle Button - Desktop */}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="hidden md:block absolute top-4 left-4 z-10 p-2 bg-bg-input rounded-md text-text-primary hover:bg-opacity-80"
-              aria-label="Toggle sidebar"
-            >
-              <MenuIcon size={20} />
-            </button>
-
-            {children}
+            <FriendlyHeader
+              isSidebarOpen={isSidebarOpen}
+              setIsSidebarOpen={setIsSidebarOpen}
+              selectedTool={selectedTool}
+            />
+            {/* Content with horizontal padding on big screens */}
+            <div className="flex-1">
+              <CasualChatInterface selectedTool={selectedTool} />
+            </div>
           </div>
         </div>
       </PinProvider>
