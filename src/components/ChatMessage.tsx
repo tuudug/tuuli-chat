@@ -1,6 +1,6 @@
 "use client"; // Needs client-side libraries for rendering
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import Image from "next/image"; // Import next/image
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
@@ -19,43 +19,7 @@ interface ChatMessageProps {
 }
 
 export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
-  const [animatedContent, setAnimatedContent] = useState(
-    message.isNew ? "" : message.content
-  );
-  const [isAnimating, setIsAnimating] = useState(
-    message.isNew && message.role === "assistant"
-  );
-  const animationStartedRef = useRef(false);
   const isUser = message.role === "user";
-
-  // Only start animation once when component mounts with isNew = true
-  useEffect(() => {
-    if (message.isNew && !isUser && !animationStartedRef.current) {
-      animationStartedRef.current = true;
-      setIsAnimating(true);
-      setAnimatedContent("");
-    }
-  }, []); // Empty dependency array - only run on mount
-
-  // Handle typewriter effect for new messages
-  useEffect(() => {
-    if (isAnimating && animatedContent.length < message.content.length) {
-      const timeoutId = setTimeout(() => {
-        setAnimatedContent(
-          message.content.substring(0, animatedContent.length + 1)
-        );
-      }, 1);
-      return () => clearTimeout(timeoutId);
-    } else if (
-      isAnimating &&
-      animatedContent.length >= message.content.length
-    ) {
-      // Animation completed
-      setTimeout(() => {
-        setIsAnimating(false);
-      }, 500); // Small delay before stopping animation
-    }
-  }, [animatedContent, isAnimating, message.content]);
 
   const isProModel =
     message.role === "assistant" && message.model_used === "gemini-2.5-pro";
@@ -119,29 +83,18 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
     ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
     : "";
 
-  // Custom component for animated text content - only for actively animating messages
-  const AnimatedText = ({ children }: { children: React.ReactNode }) => {
-    return <>{children}</>;
-  };
-
   // Custom components for markdown rendering
   const components = {
     // Override paragraph to use animated text only for animating messages
     p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-      <p {...props}>
-        <AnimatedText>{children}</AnimatedText>
-      </p>
+      <p {...props}>{children}</p>
     ),
     // Override other text elements
     strong: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
-      <strong {...props}>
-        <AnimatedText>{children}</AnimatedText>
-      </strong>
+      <strong {...props}>{children}</strong>
     ),
     em: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
-      <em {...props}>
-        <AnimatedText>{children}</AnimatedText>
-      </em>
+      <em {...props}>{children}</em>
     ),
     code: ({
       inline,
@@ -167,7 +120,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
               className={`${className} inline-block bg-gray-800 px-1 mx-1 py-1 rounded text-xs border border-gray-700 whitespace-nowrap`}
               {...props}
             >
-              <AnimatedText>{children}</AnimatedText>
+              {children}
             </code>
           );
         }
@@ -206,7 +159,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
       } else {
         return (
           <code className={`${className} text-sm`} {...props}>
-            <AnimatedText>{children}</AnimatedText>
+            {children}
           </code>
         );
       }
@@ -214,7 +167,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
   };
 
   // Use the full content for non-animating messages, animated content for animating ones
-  const contentToRender = isAnimating ? animatedContent : message.content;
+  const contentToRender = message.content;
 
   return (
     <>

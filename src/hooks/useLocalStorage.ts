@@ -10,7 +10,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
       // Try to parse it as JSON first.
       try {
         return JSON.parse(saved) as T;
-      } catch (e) {
+      } catch {
         // If it fails, it might be a raw string from a previous version.
         // Return the raw string itself. The useEffect will handle stringifying it on the next save.
         console.warn(

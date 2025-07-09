@@ -1,12 +1,11 @@
 "use client";
 
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
+import { usePin } from "@/contexts/PinContext";
 import { createClient } from "@/lib/supabase/client";
+import { api } from "@/lib/trpc/client";
 import { Tables } from "@/types/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
-import { usePin } from "@/contexts/PinContext";
+import { useEffect } from "react";
 
 const supabase = createClient();
 
@@ -91,71 +90,32 @@ const setupSubscription = async () => {
 };
 
 export const useChatHistory = () => {
-  const [chats, setChats] = useState<Tables<"chats">[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { isPinValidated, storedPin } = usePin();
 
-  const fetchChats = useCallback(async () => {
-    if (!isPinValidated) {
-      setChats([]);
-      setLoading(false);
-      return;
+  const {
+    data: chats,
+    isLoading: loading,
+    error,
+    refetch,
+  } = api.chat.historyList.useQuery(
+    {
+      pin: storedPin || undefined,
+    },
+    {
+      enabled: isPinValidated,
     }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/chat/history", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ pin: storedPin }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch chat history");
-      }
-
-      const { chats: fetchedChats, error: fetchError } = await response.json();
-
-      if (fetchError) throw new Error(fetchError);
-      setChats(fetchedChats || []);
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "An unknown error occurred.";
-      console.error("Error fetching chat history:", msg);
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [isPinValidated, storedPin]);
+  );
 
   useEffect(() => {
-    fetchChats();
-    setupSubscription();
+    if (isPinValidated) {
+      setupSubscription();
+    }
+  }, [isPinValidated]);
 
-    const handleInsert = (event: Event) => {
-      const newChat = (event as CustomEvent).detail;
-      setChats((currentChats) => {
-        if (currentChats.some((chat) => chat.id === newChat.id)) {
-          return currentChats;
-        }
-        return [newChat, ...currentChats];
-      });
-    };
-
-    const handleUpdate = (event: Event) => {
-      const updatedChat = (event as CustomEvent).detail;
-      setChats((currentChats) =>
-        currentChats.map((chat) =>
-          chat.id === updatedChat.id ? updatedChat : chat
-        )
-      );
-    };
-
-    const handleChatDeleted = () => fetchChats();
+  useEffect(() => {
+    const handleInsert = () => refetch();
+    const handleUpdate = () => refetch();
+    const handleChatDeleted = () => refetch();
 
     window.addEventListener("chat-history-insert", handleInsert);
     window.addEventListener("chat-history-update", handleUpdate);
@@ -166,7 +126,12 @@ export const useChatHistory = () => {
       window.removeEventListener("chat-history-update", handleUpdate);
       window.removeEventListener("chatDeleted", handleChatDeleted);
     };
-  }, [fetchChats]);
+  }, [refetch]);
 
-  return { chats, loading, error, refetch: fetchChats };
+  return {
+    chats: isPinValidated ? chats || [] : [],
+    loading,
+    error: error ? error.message : null,
+    refetch,
+  };
 };

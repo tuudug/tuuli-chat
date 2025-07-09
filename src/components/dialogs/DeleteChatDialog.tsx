@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { TrashIcon, X } from "lucide-react";
+import { api } from "@/lib/trpc/client";
 
 interface DeleteChatDialogProps {
   chatId: string;
@@ -24,17 +25,7 @@ export default function DeleteChatDialog({
     setError(null);
 
     try {
-      const response = await fetch("/api/chat/delete", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete chat");
-      }
-
+      await api.chat.delete.useMutation().mutateAsync({ chatId });
       onChatDeleted();
       router.push("/chat/new");
     } catch (err) {

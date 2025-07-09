@@ -180,7 +180,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   };
 
   const renderModelOption = (model: (typeof MODEL_DETAILS)[0]) => {
-    const multiplier = MODEL_MULTIPLIERS[model.id];
     const isSelected = model.id === selectedModel;
     const isPro = model.performance === "Pro";
     const isFavorite = model.id === favoriteModel;

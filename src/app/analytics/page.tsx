@@ -1,78 +1,79 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { DATE_RANGE_OPTIONS, DateRangeValue } from "@/lib/constants";
+import { api } from "@/lib/trpc/client";
+import type { Database } from "@/types/supabase";
+import { ExclamationTriangleIcon, ReloadIcon } from "@radix-ui/react-icons";
+import * as Tabs from "@radix-ui/react-tabs";
+import { createBrowserClient } from "@supabase/ssr"; // Updated import
+import { useEffect, useState } from "react";
 import {
-  PieChart,
-  Pie,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
   Cell,
-  Tooltip,
+  ComposedChart,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  BarChart,
-  Bar,
-  AreaChart,
-  Area,
-  ComposedChart,
 } from "recharts";
-import * as Tabs from "@radix-ui/react-tabs";
-import { ReloadIcon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
-import { DATE_RANGE_OPTIONS, DateRangeValue } from "@/lib/constants";
-import { createBrowserClient } from "@supabase/ssr"; // Updated import
-import type { Database } from "@/types/supabase";
 
-interface AnalyticsData {
-  // Original data
-  totalPromptTokens: number;
-  totalCompletionTokens: number;
-  totalOverallTokens: number;
-  modelUsageData: { name: string; value: number }[];
-  priceByModelData: { name: string; value: number }[];
-  priceByUserData: { name: string; value: number }[];
-  dateRange: string;
-  startDate: string;
-  fetchedMessagesCount: number;
+// interface AnalyticsData {
+//   // Original data
+//   totalPromptTokens: number;
+//   totalCompletionTokens: number;
+//   totalOverallTokens: number;
+//   modelUsageData: { name: string; value: number }[];
+//   priceByModelData: { name: string; value: number }[];
+//   priceByUserData: { name: string; value: number }[];
+//   dateRange: string;
+//   startDate: string;
+//   fetchedMessagesCount: number;
 
-  // Enhanced data
-  totalCost: number;
-  totalSparksCost: number;
-  activeUsersCount: number;
-  avgCostPerMessage: number;
-  avgTokensPerMessage: number;
-  avgCostPerToken: number;
-  dailyCostTrend: {
-    date: string;
-    cost: number;
-    messages: number;
-    tokens: number;
-    activeUsers: number;
-  }[];
-  hourlyCostTrend: { hour: string; cost: number; messages: number }[];
-  modelEfficiencyData: {
-    name: string;
-    costPerToken: number;
-    costPerMessage: number;
-    avgTokensPerMessage: number;
-    totalCost: number;
-  }[];
-  dailySparksData: { date: string; sparks: number }[];
-  userAnalyticsData: {
-    userId: string;
-    totalCost: number;
-    messageCount: number;
-    avgCostPerMessage: number;
-    totalTokens: number;
-    avgTokensPerMessage: number;
-    mostUsedModel: string;
-    daysSinceFirst: number;
-    avgMessagesPerDay: number;
-    sparksCost: number;
-    firstMessageDate: string;
-    lastMessageDate: string;
-  }[];
-}
+//   // Enhanced data
+//   totalCost: number;
+//   totalSparksCost: number;
+//   activeUsersCount: number;
+//   avgCostPerMessage: number;
+//   avgTokensPerMessage: number;
+//   avgCostPerToken: number;
+//   dailyCostTrend: {
+//     date: string;
+//     cost: number;
+//     messages: number;
+//     tokens: number;
+//     activeUsers: number;
+//   }[];
+//   hourlyCostTrend: { hour: string; cost: number; messages: number }[];
+//   modelEfficiencyData: {
+//     name: string;
+//     costPerToken: number;
+//     costPerMessage: number;
+//     avgTokensPerMessage: number;
+//     totalCost: number;
+//   }[];
+//   dailySparksData: { date: string; sparks: number }[];
+//   userAnalyticsData: {
+//     userId: string;
+//     totalCost: number;
+//     messageCount: number;
+//     avgCostPerMessage: number;
+//     totalTokens: number;
+//     avgTokensPerMessage: number;
+//     mostUsedModel: string;
+//     daysSinceFirst: number;
+//     avgMessagesPerDay: number;
+//     sparksCost: number;
+//     firstMessageDate: string;
+//     lastMessageDate: string;
+//   }[];
+// }
 
 // Dark mode appropriate colors for Recharts
 const DARK_MODE_CHART_COLORS = [
@@ -87,13 +88,9 @@ const DARK_MODE_CHART_COLORS = [
 const AnalyticsPage = () => {
   const [selectedDateRange, setSelectedDateRange] =
     useState<DateRangeValue>("24h");
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(
-    null
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
   const [checkingAdminStatus, setCheckingAdminStatus] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Updated Supabase client creation for client components
   const supabase = createBrowserClient<Database>(
@@ -110,7 +107,7 @@ const AnalyticsPage = () => {
       if (!session) {
         setIsUserAdmin(false);
         setCheckingAdminStatus(false);
-        setError("Not authenticated. Please log in.");
+        setAuthError("Not authenticated. Please log in.");
         return;
       }
       const { data: profile, error: profileError } = await supabase
@@ -121,11 +118,11 @@ const AnalyticsPage = () => {
 
       if (profileError || !profile) {
         setIsUserAdmin(false);
-        setError("Could not verify admin status.");
+        setAuthError("Could not verify admin status.");
       } else {
         setIsUserAdmin(profile.is_verified);
         if (!profile.is_verified) {
-          setError("Access Denied. This page is for administrators only.");
+          setAuthError("Access Denied. This page is for administrators only.");
         }
       }
       setCheckingAdminStatus(false);
@@ -133,43 +130,26 @@ const AnalyticsPage = () => {
     checkAdminStatus();
   }, [supabase]);
 
-  const fetchAnalyticsData = useCallback(
-    async (range: DateRangeValue) => {
-      if (!isUserAdmin) return; // Don't fetch if not admin
-
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`/api/analytics?dateRange=${range}`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Error: ${response.status}`);
-        }
-        const data: AnalyticsData = await response.json();
-        setAnalyticsData(data);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch analytics data."
-        );
-        setAnalyticsData(null);
-      } finally {
-        setIsLoading(false);
-      }
+  const {
+    data: analyticsData,
+    isLoading,
+    error: queryError,
+    refetch,
+  } = api.analytics.getData.useQuery(
+    {
+      dateRange: selectedDateRange,
     },
-    [isUserAdmin]
+    {
+      enabled: isUserAdmin && !checkingAdminStatus,
+      refetchOnWindowFocus: false,
+    }
   );
 
-  useEffect(() => {
-    if (isUserAdmin && !checkingAdminStatus) {
-      fetchAnalyticsData(selectedDateRange);
-    }
-  }, [selectedDateRange, isUserAdmin, checkingAdminStatus, fetchAnalyticsData]);
-
   const handleRefresh = () => {
-    if (isUserAdmin) {
-      fetchAnalyticsData(selectedDateRange);
-    }
+    refetch();
   };
+
+  const error = authError || (queryError ? queryError.message : null);
 
   const renderPieChart = (
     data: { name: string; value: number }[],

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { EditIcon, X } from "lucide-react";
+import { api } from "@/lib/trpc/client";
 
 interface EditChatTitleDialogProps {
   chatId: string;
@@ -45,19 +46,11 @@ export default function EditChatTitleDialog({
     setError(null);
 
     try {
-      const response = await fetch("/api/chat/edit-title", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, title: editTitle.trim() }),
+      const result = await api.chat.editTitle.useMutation().mutateAsync({
+        chatId,
+        title: editTitle.trim(),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to update title");
-      }
-
-      const data = await response.json();
-      onTitleUpdate(data.chat.title);
+      onTitleUpdate(result.chat.title);
       setIsOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update title");

@@ -64,7 +64,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [useSearch, setUseSearch] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
-  const [dragCounter, setDragCounter] = useState(0); // To prevent flashing
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -94,7 +93,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           (item) => item.kind === "file"
         );
         if (hasFiles) {
-          setDragCounter((prev) => prev + 1);
           setIsDragging(true);
         }
       }
@@ -102,13 +100,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     const handleDocumentDragLeave = (e: DragEvent) => {
       e.preventDefault();
-      setDragCounter((prev) => {
-        const newCounter = prev - 1;
-        if (newCounter === 0) {
-          setIsDragging(false);
-        }
-        return newCounter;
-      });
+      setIsDragging(false);
     };
 
     const handleDocumentDragOver = (e: DragEvent) => {
@@ -117,7 +109,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     const handleDocumentDrop = (e: DragEvent) => {
       e.preventDefault();
-      setDragCounter(0);
       setIsDragging(false);
     };
 
@@ -193,8 +184,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     e.preventDefault();
     e.stopPropagation();
 
-    // Reset the global drag state
-    setDragCounter(0);
     setIsDragging(false);
 
     if (!supportsFiles) return;

@@ -11,7 +11,7 @@ import {
 } from "@/types";
 import { ChatSettings, DEFAULT_CHAT_SETTINGS } from "@/types/settings";
 import { useSparks } from "@/contexts/SparksContext";
-import * as chatApi from "@/services/chatApi";
+import { api } from "@/lib/trpc/client";
 import { useLocalStorage } from "./useLocalStorage";
 
 type AttachmentApiData = {
@@ -22,6 +22,10 @@ type AttachmentApiData = {
 };
 
 export const useChat = (chatId: string) => {
+  const createChatMutation = api.chat.create.useMutation();
+  const sendMessageMutation = api.chat.sendMessage.useMutation();
+  const generateTitleMutation = api.chat.generateTitle.useMutation();
+  const uploadAttachmentMutation = api.attachment.upload.useMutation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { sparksBalance, setSparksBalance, user } = useSparks();
@@ -56,35 +60,40 @@ export const useChat = (chatId: string) => {
     setEffectiveChatId(chatId);
   }, [chatId]);
 
-  // Effect for fetching initial data for existing chats
+  const {
+    data: chatData,
+    isLoading: isChatDataLoading,
+    error: chatDataError,
+  } = api.chat.history.useQuery(
+    { chatId },
+    {
+      enabled: !!chatId && chatId !== "new" && !isNewChatFlowFromParams,
+    }
+  );
+
   useEffect(() => {
-    if (chatId && chatId !== "new" && !isNewChatFlowFromParams) {
-      setInitialFetchLoading(true);
-      chatApi
-        .fetchChatData(chatId)
-        .then(({ title, messages: fetchedMessages }) => {
-          setChatTitle(title);
-          setMessages(fetchedMessages);
-          const lastAssistantMessage = [...fetchedMessages]
-            .reverse()
-            .find((msg) => msg.role === "assistant" && msg.model_used);
-          if (
-            lastAssistantMessage?.model_used &&
-            MODEL_DETAILS.some((d) => d.id === lastAssistantMessage.model_used)
-          ) {
-            setSelectedModel(lastAssistantMessage.model_used as GeminiModelId);
-          }
-        })
-        .catch((err) => {
-          setError(
-            err instanceof Error ? err.message : "Failed to fetch chat data."
-          );
-          setChatTitle("Error Loading Chat");
-        })
-        .finally(() => {
-          setInitialFetchLoading(false);
-        });
-    } else if (chatId === "new") {
+    if (chatData) {
+      setChatTitle(chatData.title);
+      setMessages(chatData.messages as Message[]);
+      const lastAssistantMessage = [...(chatData.messages as Message[])]
+        .reverse()
+        .find((msg) => msg.role === "assistant" && msg.model_used);
+      if (
+        lastAssistantMessage?.model_used &&
+        MODEL_DETAILS.some((d) => d.id === lastAssistantMessage.model_used)
+      ) {
+        setSelectedModel(lastAssistantMessage.model_used as GeminiModelId);
+      }
+    }
+    if (chatDataError) {
+      setError(chatDataError.message);
+      setChatTitle("Error Loading Chat");
+    }
+    setInitialFetchLoading(isChatDataLoading);
+  }, [chatData, chatDataError, isChatDataLoading]);
+
+  useEffect(() => {
+    if (chatId === "new") {
       setMessages([]);
       setChatTitle("New Conversation");
       setInput("");
@@ -94,88 +103,95 @@ export const useChat = (chatId: string) => {
         setSelectedModel(favoriteModel);
       }
     }
-  }, [chatId, favoriteModel, isNewChatFlowFromParams]);
+  }, [chatId, favoriteModel]);
 
   // Effect for handling the newChat=true flow
   useEffect(() => {
-    if (isNewChatFlowFromParams && chatId && chatId !== "new") {
-      if (processedNewChatIdRef.current === chatId) return;
+    const initializeNewChat = async () => {
+      if (isNewChatFlowFromParams && chatId && chatId !== "new") {
+        if (processedNewChatIdRef.current === chatId) return;
 
-      const storageKey = `chat_init_${chatId}`;
-      const storedDataString = sessionStorage.getItem(storageKey);
+        const storageKey = `chat_init_${chatId}`;
+        const storedDataString = sessionStorage.getItem(storageKey);
 
-      if (storedDataString) {
-        processedNewChatIdRef.current = chatId;
-        try {
-          const storedData = JSON.parse(storedDataString) as {
-            message: string;
-            model: GeminiModelId;
-            attachmentInfo?: AttachmentApiData;
-          };
+        if (storedDataString) {
+          processedNewChatIdRef.current = chatId;
+          try {
+            const storedData = JSON.parse(storedDataString) as {
+              message: string;
+              model: GeminiModelId;
+              attachmentInfo?: AttachmentApiData;
+            };
 
-          setChatTitle("New Conversation");
-          setSelectedModel(storedData.model);
+            setChatTitle("New Conversation");
+            setSelectedModel(storedData.model);
 
-          const userMessage: Message = {
-            id: uuidv4(),
-            role: "user",
-            content: storedData.message,
-            created_at: new Date().toISOString(),
-            timestamp: new Date(),
-            attachment_name: storedData.attachmentInfo?.attachment_name,
-            attachment_type: storedData.attachmentInfo?.attachment_type,
-            attachment_preview: storedData.attachmentInfo?.attachment_content,
-          };
+            const userMessage: Message = {
+              id: uuidv4(),
+              role: "user",
+              content: storedData.message,
+              created_at: new Date().toISOString(),
+              timestamp: new Date(),
+              attachment_name: storedData.attachmentInfo?.attachment_name,
+              attachment_type: storedData.attachmentInfo?.attachment_type,
+              attachment_preview: storedData.attachmentInfo?.attachment_content,
+            };
 
-          setMessages([userMessage]);
-          setIsLoading(true);
+            setMessages([userMessage]);
+            setIsLoading(true);
 
-          chatApi
-            .sendChatMessage(
-              [userMessage],
-              {
+            const data = await sendMessageMutation.mutateAsync({
+              messages: [userMessage],
+              data: {
                 modelId: storedData.model,
                 chatId: chatId,
                 chatSettings: chatSettings,
                 ...storedData.attachmentInfo,
+                useSearch: false,
               },
-              false
-            )
-            .then(({ message: assistantMessage, newBalance }) => {
-              setMessages((prev) => [
-                ...prev,
-                { ...assistantMessage, isNew: true },
-              ]);
-              if (typeof newBalance === "number") {
-                setSparksBalance(newBalance);
-              }
-              if (userMessage.content) {
-                chatApi
-                  .generateChatTitle(
-                    chatId,
-                    userMessage.content,
-                    assistantMessage.content
-                  )
-                  .then((newTitle) => {
-                    if (newTitle) setChatTitle(newTitle);
-                  });
-              }
-            })
-            .catch((err: Error) => {
-              setError(err.message || "An unknown error occurred");
-            })
-            .finally(() => {
-              setIsLoading(false);
-              sessionStorage.removeItem(storageKey);
-              window.history.replaceState(null, "", `/chat/${chatId}`);
             });
-        } catch (_parseError) {
-          setError("Failed to initialize new chat: corrupted session data.");
-          sessionStorage.removeItem(storageKey);
+
+            const assistantMessage = data.message as Message;
+            setMessages((prev) => [
+              ...prev,
+              { ...assistantMessage, isNew: true },
+            ]);
+            if (typeof data.newBalance === "number") {
+              setSparksBalance(data.newBalance);
+            }
+
+            if (userMessage.content) {
+              await generateTitleMutation.mutateAsync({
+                chatId,
+                userPrompt: userMessage.content,
+                assistantResponse: assistantMessage.content,
+              });
+            }
+          } catch (err) {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "An unknown error occurred during chat initialization."
+            );
+          } finally {
+            setIsLoading(false);
+            sessionStorage.removeItem(storageKey);
+            router.replace(`/chat/${chatId}`);
+          }
         }
       }
-    }
-  }, [chatId, isNewChatFlowFromParams, router, setSparksBalance, chatSettings]);
+    };
+
+    initializeNewChat();
+  }, [
+    chatId,
+    isNewChatFlowFromParams,
+    setSparksBalance,
+    chatSettings,
+    sendMessageMutation,
+    generateTitleMutation,
+    router,
+  ]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -200,83 +216,47 @@ export const useChat = (chatId: string) => {
     // Handle new chat creation - improved flow
     if (effectiveChatId === "new") {
       const newClientChatId = uuidv4();
-      setPendingChatId(newClientChatId);
-
-      // Create user message immediately and show it
-      const userMessage: Message = {
-        id: uuidv4(),
-        role: "user",
-        content: currentInput,
-        created_at: new Date().toISOString(),
-        timestamp: new Date(),
-      };
-
       try {
-        // Create chat shell first
-        await chatApi.createChatShell(newClientChatId, "New chat");
+        await createChatMutation.mutateAsync({
+          clientChatId: newClientChatId,
+          title: "New Conversation",
+        });
 
-        // Handle attachment if present
-        let attachmentInfo: AttachmentApiData | undefined = undefined;
+        let attachmentInfo: AttachmentApiData | undefined;
         if (attachmentFile) {
-          attachmentInfo = await chatApi.uploadAttachment(
-            attachmentFile,
-            newClientChatId
-          );
-          userMessage.attachment_name = attachmentInfo.attachment_name;
-          userMessage.attachment_type = attachmentInfo.attachment_type;
-          userMessage.attachment_preview = attachmentInfo.attachment_content;
+          const fileContent = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(attachmentFile);
+          });
+          const uploadResult = await uploadAttachmentMutation.mutateAsync({
+            fileContent,
+            fileName: attachmentFile.name,
+            fileType: attachmentFile.type,
+            chatId: newClientChatId,
+          });
+          attachmentInfo = {
+            attachment_url: uploadResult.publicUrl,
+            attachment_content: fileContent,
+            attachment_name: uploadResult.name,
+            attachment_type: uploadResult.type,
+          };
         }
 
-        // Show user message immediately
-        setMessages([userMessage]);
-        setInput("");
-
-        // Send to API and get response
-        const { message: assistantMessage, newBalance } =
-          await chatApi.sendChatMessage(
-            [userMessage],
-            {
-              modelId: selectedModel,
-              chatId: newClientChatId,
-              chatSettings: chatSettings,
-              ...attachmentInfo,
-            },
-            useSearch
-          );
-
-        // Show assistant response
-        setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
-
-        if (typeof newBalance === "number") {
-          setSparksBalance(newBalance);
-        }
-
-        // Generate title in background
-        if (userMessage.content) {
-          chatApi
-            .generateChatTitle(
-              newClientChatId,
-              userMessage.content,
-              assistantMessage.content
-            )
-            .then((newTitle) => {
-              if (newTitle) setChatTitle(newTitle);
-            });
-        }
-
-        // Update the URL without navigating (no page reload)
-        window.history.replaceState(null, "", `/chat/${newClientChatId}`);
-
-        // Update our internal effective chat ID so subsequent messages go to this chat
-        setEffectiveChatId(newClientChatId);
-      } catch (error) {
-        setError(
-          error instanceof Error ? error.message : "Failed to create new chat."
+        const storageKey = `chat_init_${newClientChatId}`;
+        sessionStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            message: currentInput,
+            model: selectedModel,
+            attachmentInfo,
+          })
         );
-        // Reset state on error
-        setMessages([]);
-        setPendingChatId(null);
-      } finally {
+
+        router.push(`/chat/${newClientChatId}?newChat=true`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to create chat.");
         setIsLoading(false);
       }
       return;
@@ -294,14 +274,28 @@ export const useChat = (chatId: string) => {
 
     if (attachmentFile) {
       try {
-        const attachmentData = await chatApi.uploadAttachment(
-          attachmentFile,
-          effectiveChatId
-        );
-        userMessage.attachment_name = attachmentData.attachment_name;
-        userMessage.attachment_type = attachmentData.attachment_type;
-        userMessage.attachment_preview = attachmentData.attachment_content;
-        attachmentDataForApi = attachmentData;
+        const fileContent = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(attachmentFile);
+        });
+
+        const uploadResult = await uploadAttachmentMutation.mutateAsync({
+          fileContent,
+          fileName: attachmentFile.name,
+          fileType: attachmentFile.type,
+          chatId: effectiveChatId,
+        });
+        userMessage.attachment_name = uploadResult.name;
+        userMessage.attachment_type = uploadResult.type;
+        userMessage.attachment_preview = uploadResult.publicUrl;
+        attachmentDataForApi = {
+          attachment_url: uploadResult.publicUrl,
+          attachment_content: fileContent,
+          attachment_name: uploadResult.name,
+          attachment_type: uploadResult.type,
+        };
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to process attachment."
@@ -315,30 +309,36 @@ export const useChat = (chatId: string) => {
     setMessages(newMessages);
     setInput("");
 
-    try {
-      const { message: assistantMessage, newBalance } =
-        await chatApi.sendChatMessage(
-          newMessages,
-          {
-            modelId: selectedModel,
-            chatId: effectiveChatId,
-            chatSettings: chatSettings,
-            ...attachmentDataForApi,
-          },
-          useSearch
-        );
-
-      setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
-      if (typeof newBalance === "number") {
-        setSparksBalance(newBalance);
+    sendMessageMutation.mutate(
+      {
+        messages: newMessages,
+        data: {
+          modelId: selectedModel,
+          chatId: effectiveChatId,
+          chatSettings: chatSettings,
+          ...attachmentDataForApi,
+          useSearch,
+        },
+      },
+      {
+        onSuccess: (data) => {
+          const assistantMessage = data.message as Message;
+          setMessages((prev) => [
+            ...prev,
+            { ...assistantMessage, isNew: true },
+          ]);
+          if (typeof data.newBalance === "number") {
+            setSparksBalance(data.newBalance);
+          }
+        },
+        onError: (err) => {
+          setError(err.message);
+        },
+        onSettled: () => {
+          setIsLoading(false);
+        },
       }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "An unknown error occurred"
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    );
   };
 
   const handleExampleQuestionClick = (question: string) => {
@@ -373,29 +373,7 @@ export const useChat = (chatId: string) => {
 
 // Add this new hook for search status
 export const useSearchStatus = () => {
-  const [searchEnabled, setSearchEnabled] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = api.search.getStatus.useQuery();
 
-  useEffect(() => {
-    const checkSearchStatus = async () => {
-      try {
-        const response = await fetch("/api/search-status");
-        const data = await response.json();
-        setSearchEnabled(!data.is_disabled);
-      } catch (error) {
-        console.error("Failed to check search status:", error);
-        setSearchEnabled(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkSearchStatus();
-    // Check every 5 minutes
-    const interval = setInterval(checkSearchStatus, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return { searchEnabled, loading };
+  return { searchEnabled: !data?.is_disabled, loading: isLoading };
 };

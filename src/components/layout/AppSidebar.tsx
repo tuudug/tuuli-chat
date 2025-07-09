@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useEffect } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { useParams } from "next/navigation";
-import { PlusIcon, LockIcon } from "lucide-react";
 import ChatHistoryList from "@/components/chat/ChatHistoryList";
-import UserProfileWidget from "@/components/user/UserProfileWidget";
 import SparksDisplay from "@/components/SparksDisplay";
+import UserProfileWidget from "@/components/user/UserProfileWidget";
 import { usePin } from "@/contexts/PinContext";
 import { createClient } from "@/lib/supabase/client";
+import { LockIcon, PlusIcon } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect } from "react";
+
+import { useChatLayout } from "@/contexts/ChatLayoutContext";
 
 const AppSidebarContent = () => {
-  const params = useParams();
-  const currentChatId = params?.chatId as string | undefined;
+  const { activeChatId } = useChatLayout();
   const { isPinValidated, setUserProfile, isLoading, openPinModal } = usePin();
   const supabase = createClient();
 
@@ -58,7 +58,7 @@ const AppSidebarContent = () => {
             <Link
               href="/chat/new"
               className={`w-full px-4 py-2 rounded-md bg-btn-primary hover:bg-btn-primary-hover text-text-primary text-sm font-medium flex items-center justify-center gap-2 transition-colors whitespace-nowrap ${
-                currentChatId === "new" ? "bg-bg-input" : ""
+                activeChatId === "new" ? "bg-bg-input" : ""
               }`}
             >
               <PlusIcon size={16} />

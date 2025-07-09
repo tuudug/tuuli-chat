@@ -12,7 +12,7 @@ import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/clie
 import type { Tables } from "@/types/supabase";
 import type { User } from "@supabase/supabase-js";
 import { SparkBalance } from "@/types";
-import * as sparksApi from "@/services/sparksApi";
+import { api } from "@/lib/trpc/client";
 
 type UserProfile = Tables<"user_profiles">;
 
@@ -41,41 +41,35 @@ export const SparksProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createSupabaseBrowserClient();
 
-  const [claimDetails, setClaimDetails] = useState<SparkBalance | null>(null);
-  const [isClaimDetailsLoading, setIsClaimDetailsLoading] = useState(true);
-  const [claiming, setClaiming] = useState(false);
   const [countdown, setCountdown] = useState<string>("");
   const [showClaimAnimation, setShowClaimAnimation] = useState(false);
 
-  const fetchClaimStatus = useCallback(async () => {
-    try {
-      const data = await sparksApi.fetchSparkBalance();
-      setClaimDetails(data);
-    } catch (error) {
-      console.error("Error fetching spark claim status:", error);
-    } finally {
-      setIsClaimDetailsLoading(false);
-    }
-  }, []);
+  const {
+    data: claimDetails,
+    isLoading: isClaimDetailsLoading,
+    refetch: fetchClaimStatus,
+  } = api.sparks.getBalance.useQuery(undefined, {
+    enabled: !!user,
+  });
+
+  const claimMutation = api.sparks.claimDaily.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        setSparksBalance(data.new_balance);
+        setShowClaimAnimation(true);
+        setTimeout(() => setShowClaimAnimation(false), 3000);
+        fetchClaimStatus();
+      }
+    },
+    onError: (error) => {
+      console.error("Failed to claim daily sparks:", error);
+    },
+  });
 
   const handleClaimSparks = useCallback(async () => {
-    if (!claimDetails?.can_claim_today || claiming) return;
-
-    setClaiming(true);
-    try {
-      const result = await sparksApi.claimDailySparks();
-      if (result.success) {
-        setShowClaimAnimation(true);
-        setTimeout(() => setShowClaimAnimation(false), 2000);
-        setSparksBalance(result.new_balance);
-        await fetchClaimStatus();
-      }
-    } catch (error) {
-      console.error("Error claiming sparks:", error);
-    } finally {
-      setClaiming(false);
-    }
-  }, [claimDetails, claiming, fetchClaimStatus]);
+    if (!claimDetails?.can_claim_today || claimMutation.isPending) return;
+    claimMutation.mutate();
+  }, [claimDetails, claimMutation]);
 
   const fetchProfile = useCallback(async () => {
     setIsLoading(true);
@@ -94,7 +88,7 @@ export const SparksProvider = ({ children }: { children: ReactNode }) => {
       if (profile) {
         setUserProfile(profile);
         setSparksBalance(profile.current_sparks);
-        await fetchClaimStatus();
+        fetchClaimStatus();
       } else if (error) {
         console.error("Error fetching user profile:", error.message);
       }
@@ -139,13 +133,13 @@ export const SparksProvider = ({ children }: { children: ReactNode }) => {
     setSparksBalance,
     isLoading,
     refetchProfile: fetchProfile,
-    claimDetails,
+    claimDetails: claimDetails as SparkBalance | null,
     isClaimDetailsLoading,
-    claiming,
+    claiming: claimMutation.isPending,
     countdown,
     showClaimAnimation,
     handleClaimSparks,
-    fetchClaimStatus,
+    fetchClaimStatus: fetchClaimStatus as unknown as () => Promise<void>,
   };
 
   return (

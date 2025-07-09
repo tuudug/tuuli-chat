@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Tables } from "@/types/supabase";
+import { api } from "@/lib/trpc/client";
 
 interface PinContextType {
   isPinSet: boolean;
@@ -55,24 +56,13 @@ export const PinProvider = ({ children }: { children: ReactNode }) => {
 
   const validatePin = async (pin: string) => {
     try {
-      const response = await fetch("/api/pin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ pin, action: "validate" }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error validating PIN:", errorData.error);
-        return false;
+      const result = await api.pin.validate.useMutation().mutateAsync({ pin });
+      if (result.success) {
+        setStoredPin(pin);
+        setIsPinValidated(true);
+        return true;
       }
-
-      // PIN is valid, update local state
-      setStoredPin(pin);
-      setIsPinValidated(true);
-      return true;
+      return false;
     } catch (error) {
       console.error("Error validating PIN:", error);
       return false;
@@ -82,27 +72,14 @@ export const PinProvider = ({ children }: { children: ReactNode }) => {
   const setPin = async (pin: string) => {
     if (userProfile) {
       try {
-        const response = await fetch("/api/pin", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ pin, action: "set" }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Error setting PIN:", errorData.error);
-          return false;
+        const result = await api.pin.set.useMutation().mutateAsync({ pin });
+        if (result.success) {
+          setUserProfile(result.profile);
+          setStoredPin(pin);
+          setIsPinValidated(true);
+          return true;
         }
-
-        const { profile: updatedProfile } = await response.json();
-
-        // Update local state with data from server
-        setUserProfile(updatedProfile);
-        setStoredPin(pin);
-        setIsPinValidated(true);
-        return true;
+        return false;
       } catch (error) {
         console.error("Error setting PIN:", error);
         return false;

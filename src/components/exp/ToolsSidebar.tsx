@@ -1,27 +1,26 @@
 "use client";
 
-import React from "react";
-import Image from "next/image";
-import {
-  MessageSquare,
-  CheckSquare,
-  Brain,
-  StickyNote,
-  Calendar,
-  Bookmark,
-  Mic,
-  FileText,
-  BarChart3,
-  Search,
-  Paperclip,
-  Bell,
-  BookOpen,
-  Heart,
-  Settings,
-} from "lucide-react";
 import SparksDisplay from "@/components/SparksDisplay";
 import UserProfileWidget from "@/components/user/UserProfileWidget";
+import {
+  BarChart3,
+  Bell,
+  Bookmark,
+  BookOpen,
+  Brain,
+  Calendar,
+  CheckSquare,
+  FileText,
+  Heart,
+  MessageSquare,
+  Paperclip,
+  Search,
+  Settings,
+  StickyNote,
+} from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
+import React from "react";
 
 interface Tool {
   id: string;

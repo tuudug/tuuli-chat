@@ -38,6 +38,27 @@ export type Database = {
         }
         Relationships: []
       }
+      grounding_api_usage: {
+        Row: {
+          call_count: number
+          date: string
+          id: number
+          is_disabled: boolean
+        }
+        Insert: {
+          call_count?: number
+          date: string
+          id?: never
+          is_disabled?: boolean
+        }
+        Update: {
+          call_count?: number
+          date?: string
+          id?: never
+          is_disabled?: boolean
+        }
+        Relationships: []
+      }
       main_conversations: {
         Row: {
           created_at: string

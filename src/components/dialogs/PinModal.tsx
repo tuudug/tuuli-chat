@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
 import { usePin } from "@/contexts/PinContext";
+import * as Dialog from "@radix-ui/react-dialog";
 import { LockIcon, ShieldIcon, XIcon } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 
 const PinModal = () => {
   const {
@@ -12,7 +12,6 @@ const PinModal = () => {
     validatePin,
     setPin,
     isLoading: isPinLoading,
-    openPinModal,
     forceOpenModal,
     setForceOpenModal,
   } = usePin();
@@ -116,7 +115,7 @@ const PinModal = () => {
           setError("Failed to set PIN. Please try again.");
         }
       }
-    } catch (err) {
+    } catch {
       setError("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);

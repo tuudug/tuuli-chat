@@ -1,16 +1,15 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useChatHistory } from "@/hooks/useChatHistory";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import { MessageSquareIcon } from "lucide-react";
-import { useChatHistory } from "@/hooks/useChatHistory";
+import Link from "next/link";
+
+import { useChatLayout } from "@/contexts/ChatLayoutContext";
 
 export default function ChatHistoryList() {
   const { chats, loading, error } = useChatHistory();
-  const params = useParams();
-  const currentChatId = params?.chatId as string | undefined;
+  const { activeChatId } = useChatLayout();
 
   if (loading) {
     return (
@@ -45,7 +44,7 @@ export default function ChatHistoryList() {
                 <Link
                   href={`/chat/${chat.id}`}
                   className={`block w-full text-left px-2 py-1.5 rounded text-sm text-text-primary hover:bg-bg-input focus:outline-none focus:bg-bg-input transition-colors truncate ${
-                    currentChatId === chat.id ? "bg-bg-input" : ""
+                    activeChatId === chat.id ? "bg-bg-input" : ""
                   }`}
                 >
                   {chat.title ||

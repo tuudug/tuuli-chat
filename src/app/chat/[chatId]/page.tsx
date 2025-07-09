@@ -1,60 +1,71 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import ChatInterface from "@/components/ChatInterface";
 import ChatNotFound from "@/components/ChatNotFound";
-import { createServer } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { notFound, useSearchParams, useParams } from "next/navigation";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
-interface ChatPageProps {
-  params: Promise<{ chatId: string }>;
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
-}
+type ValidationStatus = "valid" | "not_found" | "unauthorized" | "loading";
 
-export default async function ChatPage({
-  params,
-  searchParams,
-}: ChatPageProps) {
-  const { chatId } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-
-  // Allow "new" chat without validation OR if it's a client-side generated ID with newChat=true
-  if (
-    chatId === "new" ||
-    (chatId && resolvedSearchParams?.newChat === "true")
-  ) {
-    return <ChatInterface chatId={chatId} />;
-  }
-
-  // Validate chat existence and ownership for existing chats (that are not part of the newChat=true flow)
-  const supabase = await createServer();
-
-  // Get the current user
+async function validateChat(chatId: string): Promise<ValidationStatus> {
+  const supabase = createClient();
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) {
-    // User not authenticated, redirect to 404
-    notFound();
-  }
+  if (!user) return "unauthorized";
 
-  // Check if chat exists and belongs to the user
-  const { data: chat, error: chatError } = await supabase
+  const { data: chat, error } = await supabase
     .from("chats")
-    .select("id, user_id")
+    .select("user_id")
     .eq("id", chatId)
     .single();
 
-  if (chatError || !chat) {
-    // Chat doesn't exist
+  if (error || !chat) return "not_found";
+  if (chat.user_id !== user.id) return "unauthorized";
+
+  return "valid";
+}
+
+export default function ChatPage() {
+  const params = useParams();
+  const chatId = params.chatId as string;
+  const searchParams = useSearchParams();
+  const isNewChat = searchParams.get("newChat") === "true";
+  const [validationStatus, setValidationStatus] =
+    useState<ValidationStatus>("loading");
+
+  useEffect(() => {
+    if (chatId === "new" || isNewChat) {
+      setValidationStatus("valid");
+      return;
+    }
+
+    const checkChat = async () => {
+      const status = await validateChat(chatId);
+      setValidationStatus(status);
+    };
+
+    checkChat();
+  }, [chatId, isNewChat]);
+
+  if (validationStatus === "loading") {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (validationStatus === "not_found") {
     return <ChatNotFound reason="not_found" />;
   }
 
-  if (chat.user_id !== user.id) {
-    // Chat exists but doesn't belong to the user
-    return <ChatNotFound reason="unauthorized" />;
+  if (validationStatus === "unauthorized") {
+    notFound();
   }
 
-  // Chat exists and belongs to the user
   return <ChatInterface chatId={chatId} />;
 }

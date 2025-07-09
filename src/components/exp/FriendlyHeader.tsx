@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MessageCircle, Menu } from "lucide-react";
 
 interface FriendlyHeaderProps {
   onToggleThreads: () => void;
@@ -9,11 +8,7 @@ interface FriendlyHeaderProps {
   threadCount: number;
 }
 
-export default function FriendlyHeader({
-  onToggleThreads,
-  showThreads,
-  threadCount,
-}: FriendlyHeaderProps) {
+export default function FriendlyHeader({}: FriendlyHeaderProps) {
   return (
     <motion.div
       className="pl-16 py-4 bg-bg-sidebar border-b border-border-primary"
