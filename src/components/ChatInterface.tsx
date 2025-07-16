@@ -32,6 +32,9 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     sparksBalance,
     handleExampleQuestionClick,
     userAvatar,
+    hasMore,
+    loadMore,
+    isLoadingMore,
   } = useChat(chatId);
 
   const [dynamicContainerStyle, setDynamicContainerStyle] = useState({});
@@ -82,6 +85,9 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         onExampleQuestionClick={handleExampleQuestionClick}
         selectedModel={selectedModel}
         userAvatar={userAvatar}
+        hasMore={hasMore}
+        onLoadMore={loadMore}
+        isLoadingMore={isLoadingMore}
       />
 
       <ChatInputArea

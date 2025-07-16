@@ -31,6 +31,7 @@ export const useChat = (chatId: string) => {
   const { sparksBalance, setSparksBalance, user } = useSparks();
   const isNewChatFlowFromParams = searchParams.get("newChat") === "true";
   const processedNewChatIdRef = useRef<string | null>(null);
+  const utils = api.useUtils();
 
   // State Management
   const [messages, setMessages] = useState<Message[]>([]);
@@ -48,6 +49,8 @@ export const useChat = (chatId: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialFetchLoading, setInitialFetchLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // New state for handling new chat creation
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export const useChat = (chatId: string) => {
     isLoading: isChatDataLoading,
     error: chatDataError,
   } = api.chat.history.useQuery(
-    { chatId },
+    { chatId, limit: 10 },
     {
       enabled: !!chatId && chatId !== "new" && !isNewChatFlowFromParams,
     }
@@ -75,6 +78,7 @@ export const useChat = (chatId: string) => {
     if (chatData) {
       setChatTitle(chatData.title);
       setMessages(chatData.messages as Message[]);
+      setHasMore(chatData.messages.length === 10);
       const lastAssistantMessage = [...(chatData.messages as Message[])]
         .reverse()
         .find((msg) => msg.role === "assistant" && msg.model_used);
@@ -99,6 +103,7 @@ export const useChat = (chatId: string) => {
       setInput("");
       setError(null);
       setPendingChatId(null);
+      setHasMore(false);
       if (favoriteModel) {
         setSelectedModel(favoriteModel);
       }
@@ -345,6 +350,29 @@ export const useChat = (chatId: string) => {
     setInput(question);
   };
 
+  const loadMore = async () => {
+    if (!hasMore || isLoadingMore || !messages.length) return;
+
+    setIsLoadingMore(true);
+    try {
+      const oldestTimestamp = messages[0].created_at;
+      const data = await utils.chat.history.fetch({
+        chatId: effectiveChatId,
+        limit: 10,
+        before: oldestTimestamp,
+      });
+      const newOlderMessages = data.messages as Message[];
+      setMessages((prev) => [...newOlderMessages, ...prev]);
+      setHasMore(newOlderMessages.length === 10);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load more messages"
+      );
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   return {
     messages,
     chatTitle,
@@ -368,6 +396,9 @@ export const useChat = (chatId: string) => {
     sparksBalance,
     userAvatar: user?.user_metadata.avatar_url,
     pendingChatId, // Expose this for any UI needs
+    hasMore,
+    loadMore,
+    isLoadingMore,
   };
 };
 

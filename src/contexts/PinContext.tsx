@@ -38,6 +38,9 @@ export const PinProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [forceOpenModal, setForceOpenModal] = useState(false);
 
+  const validateMutation = api.pin.validate.useMutation();
+  const setMutation = api.pin.set.useMutation();
+
   const isPinSet = !!userProfile?.pin_code;
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export const PinProvider = ({ children }: { children: ReactNode }) => {
 
   const validatePin = async (pin: string) => {
     try {
-      const result = await api.pin.validate.useMutation().mutateAsync({ pin });
+      const result = await validateMutation.mutateAsync({ pin });
       if (result.success) {
         setStoredPin(pin);
         setIsPinValidated(true);
@@ -72,7 +75,7 @@ export const PinProvider = ({ children }: { children: ReactNode }) => {
   const setPin = async (pin: string) => {
     if (userProfile) {
       try {
-        const result = await api.pin.set.useMutation().mutateAsync({ pin });
+        const result = await setMutation.mutateAsync({ pin });
         if (result.success) {
           setUserProfile(result.profile);
           setStoredPin(pin);
