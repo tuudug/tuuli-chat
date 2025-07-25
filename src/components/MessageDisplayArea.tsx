@@ -19,6 +19,9 @@ interface MessageDisplayAreaProps {
   onExampleQuestionClick: (question: string) => void;
   selectedModel: GeminiModelId;
   userAvatar?: string | null;
+  hasMore?: boolean;
+  onLoadMore?: () => Promise<void>;
+  isLoadingMore?: boolean;
 }
 
 const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
@@ -32,15 +35,48 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   onExampleQuestionClick,
   selectedModel: _selectedModel,
   userAvatar,
+  hasMore = false,
+  onLoadMore,
+  isLoadingMore = false,
 }) => {
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
+  const prevFirstTimestampRef = useRef<string | null>(null);
+  const prevLastTimestampRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (scrollAreaViewportRef.current) {
-      scrollAreaViewportRef.current.scrollTop =
-        scrollAreaViewportRef.current.scrollHeight;
+    const viewport = scrollAreaViewportRef.current;
+    if (!viewport || messages.length === 0) return;
+
+    const currentFirst = messages[0].created_at;
+    const currentLast = messages[messages.length - 1].created_at;
+
+    const wasPrepend =
+      prevFirstTimestampRef.current !== null &&
+      new Date(currentFirst) < new Date(prevFirstTimestampRef.current);
+
+    const wasAppend =
+      prevLastTimestampRef.current === null ||
+      new Date(currentLast) > new Date(prevLastTimestampRef.current);
+
+    if (wasAppend && !wasPrepend) {
+      viewport.scrollTop = viewport.scrollHeight;
     }
+
+    prevFirstTimestampRef.current = currentFirst;
+    prevLastTimestampRef.current = currentLast;
   }, [messages]);
+
+  const handleLoadMore = async () => {
+    if (!onLoadMore || !scrollAreaViewportRef.current || isLoadingMore) return;
+
+    const viewport = scrollAreaViewportRef.current;
+    const prevHeight = viewport.scrollHeight;
+
+    await onLoadMore();
+
+    const newHeight = viewport.scrollHeight;
+    viewport.scrollTop += newHeight - prevHeight;
+  };
 
   const showInitialLoading = initialFetchLoading && chatId !== "new";
   const showInitialError = initialMessagesError && chatId !== "new";
@@ -114,6 +150,20 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
 
           {!showInitialLoading && !showInitialError && (
             <div className="space-y-4 pb-4 sm:px-4 md:px-16">
+              {hasMore && (
+                <div className="flex justify-center mb-4">
+                  {isLoadingMore ? (
+                    <LoadingSpinner />
+                  ) : (
+                    <button
+                      onClick={handleLoadMore}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      Load More
+                    </button>
+                  )}
+                </div>
+              )}
               <AnimatePresence>
                 {messages.map((msg, index) => (
                   <motion.div

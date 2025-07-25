@@ -592,10 +592,16 @@ Title:`;
     }),
 
   history: protectedProcedure
-    .input(z.object({ chatId: z.string().uuid() }))
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        limit: z.number().optional(),
+        before: z.string().optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const { supabase, user } = ctx;
-      const { chatId } = input;
+      const { chatId, limit, before } = input;
 
       const { data: chat, error: chatError } = await supabase
         .from("chats")
@@ -611,17 +617,33 @@ Title:`;
         });
       }
 
-      const { data: messages, error: messagesError } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("chat_id", chatId)
-        .order("created_at", { ascending: true });
+      let query = supabase.from("messages").select("*").eq("chat_id", chatId);
+
+      if (limit) {
+        query = query.order("created_at", { ascending: false });
+        if (before) {
+          query = query.lt("created_at", before);
+        }
+        query = query.limit(limit);
+      } else {
+        query = query.order("created_at", { ascending: true });
+      }
+
+      const { data: messagesData, error: messagesError } = await query;
 
       if (messagesError) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch messages",
         });
+      }
+
+      let messages = messagesData;
+      if (limit) {
+        messages = messagesData.sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
       }
 
       return {
