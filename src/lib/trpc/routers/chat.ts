@@ -14,6 +14,7 @@ import {
 import { ChatSettings } from "@/types/settings";
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { estimateTokenCount } from "@/lib/sparks";
+import { randomUUID } from "crypto";
 import { sparksRouter } from "./sparks";
 
 const genAI = new GoogleGenAI({
@@ -210,6 +211,7 @@ export const chatRouter = createTRPCRouter({
       //   });
       // }
 
+      // Build messages for LLM
       const messagesForLlm: Content[] = messages.map((msg) => ({
         role: msg.role === "assistant" ? "model" : "user",
         parts: [{ text: msg.content }],
@@ -231,61 +233,7 @@ export const chatRouter = createTRPCRouter({
         }
       }
 
-      const systemPromptObject = createSystemPrompt(modelId, chatSettings);
-      const systemPromptText =
-        (systemPromptObject.parts?.[0] as Part)?.text || "";
-      const contentsForLlm = [
-        { role: "user" as const, parts: [{ text: systemPromptText }] },
-        {
-          role: "model" as const,
-          parts: [{ text: "Okay, I will follow these instructions." }],
-        },
-        ...messagesForLlm,
-      ];
-
-      const groundingTool = {
-        googleSearch: {},
-      };
-
-      const resultStream = await genAI.models.generateContentStream({
-        config: {
-          temperature: chatSettings.temperature,
-          tools: useSearch ? [groundingTool] : undefined,
-        },
-        model: modelId,
-        contents: contentsForLlm,
-      });
-
-      let assistantResponseText = "";
-      let searchReferences: { url: string; title: string }[] = [];
-      for await (const chunk of resultStream) {
-        const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          assistantResponseText += text;
-        }
-
-        if (chunk.candidates?.[0]?.finishReason === "STOP") {
-          const groundingChunks =
-            chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-          if (Array.isArray(groundingChunks)) {
-            searchReferences = groundingChunks
-              .map((refChunk) => {
-                if (refChunk.web && refChunk.web.uri && refChunk.web.title) {
-                  return {
-                    url: refChunk.web.uri,
-                    title: refChunk.web.title,
-                  };
-                }
-                return null;
-              })
-              .filter(
-                (ref): ref is { url: string; title: string } => ref !== null
-              );
-          }
-        }
-      }
-      const completionTokens = estimateTokenCount(assistantResponseText);
-
+      // Save the user message BEFORE contacting the LLM so errors still persist the user's input
       await supabase.from("messages").insert({
         chat_id: clientProvidedChatId,
         user_id: user.id,
@@ -297,67 +245,160 @@ export const chatRouter = createTRPCRouter({
         attachment_type: data?.attachment_type,
       });
 
-      const { data: assistantMessageShell, error: shellError } =
-        await supabaseServiceAdmin
+      try {
+        // Prepare system prompt and call LLM
+        const systemPromptObject = createSystemPrompt(modelId, chatSettings);
+        const systemPromptText =
+          (systemPromptObject.parts?.[0] as Part)?.text || "";
+        const contentsForLlm = [
+          { role: "user" as const, parts: [{ text: systemPromptText }] },
+          {
+            role: "model" as const,
+            parts: [{ text: "Okay, I will follow these instructions." }],
+          },
+          ...messagesForLlm,
+        ];
+
+        const groundingTool = {
+          googleSearch: {},
+        };
+
+        const resultStream = await genAI.models.generateContentStream({
+          config: {
+            temperature: chatSettings.temperature,
+            tools: useSearch ? [groundingTool] : undefined,
+          },
+          model: modelId,
+          contents: contentsForLlm,
+        });
+
+        let assistantResponseText = "";
+        let searchReferences: { url: string; title: string }[] = [];
+        for await (const chunk of resultStream) {
+          const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            assistantResponseText += text;
+          }
+
+          if (chunk.candidates?.[0]?.finishReason === "STOP") {
+            const groundingChunks =
+              chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            if (Array.isArray(groundingChunks)) {
+              searchReferences = groundingChunks
+                .map((refChunk) => {
+                  if (refChunk.web && refChunk.web.uri && refChunk.web.title) {
+                    return {
+                      url: refChunk.web.uri,
+                      title: refChunk.web.title,
+                    };
+                  }
+                  return null;
+                })
+                .filter(
+                  (ref): ref is { url: string; title: string } => ref !== null
+                );
+            }
+          }
+        }
+
+        const completionTokens = estimateTokenCount(assistantResponseText);
+
+        const { data: assistantMessageShell, error: shellError } =
+          await supabaseServiceAdmin
+            .from("messages")
+            .insert({
+              chat_id: clientProvidedChatId,
+              user_id: user.id,
+              role: "assistant",
+              content: assistantResponseText,
+              model_used: modelId,
+              search_references: searchReferences,
+            })
+            .select("id")
+            .single();
+
+        if (shellError || !assistantMessageShell) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to save assistant message.",
+          });
+        }
+
+        if (searchReferences.length > 0) {
+          const { error: newUsageError } = await supabaseServiceAdmin
+            .from("grounding_api_usage")
+            .upsert(
+              {
+                date: today,
+                call_count: (usageData?.call_count || 0) + 1,
+                is_disabled: (usageData?.call_count || 0) + 1 >= 1450,
+              },
+              { onConflict: "date" }
+            );
+          if (newUsageError) {
+            console.error("Error updating search usage:", newUsageError);
+          }
+        }
+
+        const caller = sparksCaller(ctx);
+        const sparksResult = await caller.logAndSpend({
+          model_id: modelId,
+          prompt_tokens: estimatedInputTokens,
+          completion_tokens: completionTokens,
+          assistant_message_id: assistantMessageShell.id,
+          use_search: useSearch || false,
+        });
+
+        const finalAssistantMessage = {
+          id: assistantMessageShell.id,
+          role: "assistant",
+          content: assistantResponseText,
+          created_at: new Date().toISOString(),
+          model_used: modelId,
+          sparks_cost: sparksResult?.sparks_spent,
+          search_references: searchReferences,
+        };
+
+        return {
+          message: finalAssistantMessage,
+          newBalance: sparksResult?.new_balance,
+        };
+      } catch (err) {
+        // On ANY error during generation or saving, persist an assistant error message
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred.";
+        const safeErrorText = `Sorry, I hit an error while generating a response.\n\nDetails: ${errorMessage}`;
+
+        const { data: errorAssistantMessage } = await supabaseServiceAdmin
           .from("messages")
           .insert({
             chat_id: clientProvidedChatId,
             user_id: user.id,
             role: "assistant",
-            content: assistantResponseText,
+            content: safeErrorText,
             model_used: modelId,
-            search_references: searchReferences,
+            usage_metadata: {
+              error: true,
+              stage: "generation",
+              message: errorMessage,
+            },
           })
           .select("id")
           .single();
 
-      if (shellError || !assistantMessageShell) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to save assistant message.",
-        });
+        // Even if the insert above fails silently, still return a client-visible error message
+        return {
+          message: {
+            id: errorAssistantMessage?.id || randomUUID(),
+            role: "assistant" as const,
+            content: safeErrorText,
+            created_at: new Date().toISOString(),
+            model_used: modelId,
+            usage_metadata: { error: true },
+          },
+          newBalance: userProfile?.current_sparks ?? undefined,
+        };
       }
-
-      if (searchReferences.length > 0) {
-        const { error: newUsageError } = await supabaseServiceAdmin
-          .from("grounding_api_usage")
-          .upsert(
-            {
-              date: today,
-              call_count: (usageData?.call_count || 0) + 1,
-              is_disabled: (usageData?.call_count || 0) + 1 >= 1450,
-            },
-            { onConflict: "date" }
-          );
-        if (newUsageError) {
-          console.error("Error updating search usage:", newUsageError);
-        }
-      }
-
-      const caller = sparksCaller(ctx);
-
-      const sparksResult = await caller.logAndSpend({
-        model_id: modelId,
-        prompt_tokens: estimatedInputTokens,
-        completion_tokens: completionTokens,
-        assistant_message_id: assistantMessageShell.id,
-        use_search: useSearch || false,
-      });
-
-      const finalAssistantMessage = {
-        id: assistantMessageShell.id,
-        role: "assistant",
-        content: assistantResponseText,
-        created_at: new Date().toISOString(),
-        model_used: modelId,
-        sparks_cost: sparksResult?.sparks_spent,
-        search_references: searchReferences,
-      };
-
-      return {
-        message: finalAssistantMessage,
-        newBalance: sparksResult?.new_balance,
-      };
     }),
 
   create: protectedProcedure

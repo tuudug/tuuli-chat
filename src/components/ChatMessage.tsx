@@ -24,6 +24,13 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
   const isProModel =
     message.role === "assistant" && message.model_used === "gemini-2.5-pro";
 
+  const isErrorMessage = !!(
+    message.role === "assistant" &&
+    message.usage_metadata &&
+    typeof message.usage_metadata === "object" &&
+    (message.usage_metadata as { error?: unknown }).error
+  );
+
   // Copy state management
   const [isCopied, setIsCopied] = useState(false);
   const [copiedCodeBlock, setCopiedCodeBlock] = useState<string | null>(null);
@@ -247,6 +254,8 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
               className={`p-3 rounded-lg max-w-[calc(100vw-1rem)] sm:max-w-full ${
                 isUser
                   ? "bg-btn-primary text-text-primary rounded"
+                  : isErrorMessage
+                  ? "bg-bg-input text-red-400 border border-red-200 rounded"
                   : "bg-bg-input text-text-primary rounded"
               } ${isProModel ? "rounded-[7px]" : ""}`}
               initial={{ scale: 0.95, opacity: 0 }}

@@ -17,6 +17,7 @@ export type Message = {
   estimated_input_tokens?: number | null;
   estimated_output_tokens?: number | null;
   search_references?: { url: string; title: string }[] | null;
+  usage_metadata?: Record<string, unknown> | null;
   isNew?: boolean; // Client-side flag for new messages to animate
   isThread?: boolean; // For thread functionality
   data?: {
