@@ -20,6 +20,7 @@ export type Message = {
   usage_metadata?: Record<string, unknown> | null;
   isNew?: boolean; // Client-side flag for new messages to animate
   isThread?: boolean; // For thread functionality
+  toolsUsed?: string[]; // Track which tools were used in generating this message
   data?: {
     ui_model_used?: string;
     ui_created_at?: string;
