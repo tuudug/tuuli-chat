@@ -264,6 +264,7 @@ export default function CasualChatInterface({
       role: "user",
       created_at: new Date().toISOString(),
       user_id: "temp-user",
+  tools_used: null,
     };
 
     const updatedMessages = [...messages, userMessage];
