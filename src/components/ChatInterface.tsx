@@ -29,7 +29,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     error,
     initialFetchLoading,
     isAwaitingFirstToken,
-    sparksBalance,
     handleExampleQuestionClick,
     userAvatar,
     hasMore,
@@ -101,8 +100,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         chatSettings={chatSettings}
         setChatSettings={setChatSettings}
         isWaitingForResponse={isLoading}
-        messages={messages.map((msg) => ({ content: msg.content }))}
-        userSparks={sparksBalance || 0}
       />
     </div>
   );

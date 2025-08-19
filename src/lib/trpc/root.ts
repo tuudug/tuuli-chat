@@ -1,11 +1,9 @@
 import { createCallerFactory, createTRPCRouter } from "@/lib/trpc/server";
-import { sparksRouter } from "./routers/sparks";
 import { chatRouter } from "./routers/chat";
 import { analyticsRouter } from "./routers/analytics";
-import { pinRouter } from "./routers/pin";
 import { searchRouter } from "./routers/search";
 import { attachmentRouter } from "./routers/attachment";
-import { expRouter } from "./routers/exp";
+import { userRouter } from "./routers/user";
 
 /**
  * This is the primary router for your server.
@@ -13,13 +11,11 @@ import { expRouter } from "./routers/exp";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  sparks: sparksRouter,
   chat: chatRouter,
   analytics: analyticsRouter,
-  pin: pinRouter,
   search: searchRouter,
   attachment: attachmentRouter,
-  exp: expRouter,
+  user: userRouter,
 });
 
 // export type definition of API

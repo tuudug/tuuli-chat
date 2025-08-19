@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import GeminiIcon from "@/components/icons/GeminiIcon";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
-import { MODEL_MULTIPLIERS } from "@/lib/constants";
 
 interface ModelSelectorProps {
   selectedModel: GeminiModelId;
@@ -86,12 +85,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   const gemini20Models = MODEL_DETAILS.filter(
     (model) => model.version === "2.0"
   );
-
-  const formatMultiplier = (multiplier: number) => {
-    if (multiplier === 1.0) return "1x";
-    if (multiplier < 1.0) return `${multiplier}x`;
-    return `${multiplier}x`;
-  };
 
   const handleModelSelect = (modelId: GeminiModelId) => {
     setSelectedModel(modelId);
@@ -318,8 +311,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     const tooltipContent = getModelTooltipContent(model);
     if (!tooltipContent) return null;
 
-    const multiplier = MODEL_MULTIPLIERS[model.id];
-
     return createPortal(
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
@@ -349,13 +340,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
             </div>
 
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">Sparks Cost:</span>
-                <div className="text-xs px-2 py-0.5 rounded font-medium bg-amber-500/20 text-amber-300">
-                  {formatMultiplier(multiplier)} sparks
-                </div>
-              </div>
-
               {tooltipContent.bestFor && (
                 <div>
                   <h4 className="text-xs font-medium text-gray-300 mb-2">
@@ -439,8 +423,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     const tooltipContent = getModelTooltipContent(model);
     if (!tooltipContent) return null;
 
-    const multiplier = MODEL_MULTIPLIERS[model.id];
-
     return createPortal(
       <div
         className="fixed w-72 bg-gray-800/95 backdrop-blur-sm border border-gray-600/50 rounded-lg shadow-xl z-[100] pointer-events-none transition-all duration-75"
@@ -456,9 +438,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
               <span className="font-medium text-white text-xs">
                 {model.name}
               </span>
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded font-medium bg-amber-500/20 text-amber-300">
-              {formatMultiplier(multiplier)} sparks
             </div>
           </div>
 

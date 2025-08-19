@@ -10,8 +10,8 @@ import {
   MODEL_DETAILS,
 } from "@/types";
 import { ChatSettings, DEFAULT_CHAT_SETTINGS } from "@/types/settings";
-import { useSparks } from "@/contexts/SparksContext";
 import { api } from "@/lib/trpc/client";
+import { useUser } from "@clerk/nextjs";
 import { useLocalStorage } from "./useLocalStorage";
 
 type AttachmentApiData = {
@@ -28,7 +28,7 @@ export const useChat = (chatId: string) => {
   const uploadAttachmentMutation = api.attachment.upload.useMutation();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { sparksBalance, setSparksBalance, user } = useSparks();
+  const { user } = useUser();
   const isNewChatFlowFromParams = searchParams.get("newChat") === "true";
   const processedNewChatIdRef = useRef<string | null>(null);
   const utils = api.useUtils();
@@ -161,9 +161,6 @@ export const useChat = (chatId: string) => {
               ...prev,
               { ...assistantMessage, isNew: true },
             ]);
-            if (typeof data.newBalance === "number") {
-              setSparksBalance(data.newBalance);
-            }
 
             if (userMessage.content) {
               await generateTitleMutation.mutateAsync({
@@ -191,7 +188,6 @@ export const useChat = (chatId: string) => {
   }, [
     chatId,
     isNewChatFlowFromParams,
-    setSparksBalance,
     chatSettings,
     sendMessageMutation,
     generateTitleMutation,
@@ -332,9 +328,6 @@ export const useChat = (chatId: string) => {
             ...prev,
             { ...assistantMessage, isNew: true },
           ]);
-          if (typeof data.newBalance === "number") {
-            setSparksBalance(data.newBalance);
-          }
         },
         onError: (err) => {
           setError(err.message);
@@ -393,8 +386,7 @@ export const useChat = (chatId: string) => {
     handleExampleQuestionClick,
     isNewChatFlow: isNewChatFlowFromParams,
     uiReadyForNewChat: true, // Always show UI now
-    sparksBalance,
-    userAvatar: user?.user_metadata.avatar_url,
+    userAvatar: user?.imageUrl,
     pendingChatId, // Expose this for any UI needs
     hasMore,
     loadMore,

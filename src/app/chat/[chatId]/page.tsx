@@ -3,31 +3,11 @@
 import React, { useEffect, useState } from "react";
 import ChatInterface from "@/components/ChatInterface";
 import ChatNotFound from "@/components/ChatNotFound";
-import { createClient } from "@/lib/supabase/client";
 import { notFound, useSearchParams, useParams } from "next/navigation";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { api } from "@/lib/trpc/client";
 
 type ValidationStatus = "valid" | "not_found" | "unauthorized" | "loading";
-
-async function validateChat(chatId: string): Promise<ValidationStatus> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return "unauthorized";
-
-  const { data: chat, error } = await supabase
-    .from("chats")
-    .select("user_id")
-    .eq("id", chatId)
-    .single();
-
-  if (error || !chat) return "not_found";
-  if (chat.user_id !== user.id) return "unauthorized";
-
-  return "valid";
-}
 
 export default function ChatPage() {
   const params = useParams();
@@ -37,19 +17,39 @@ export default function ChatPage() {
   const [validationStatus, setValidationStatus] =
     useState<ValidationStatus>("loading");
 
+  // Use tRPC to validate chat ownership
+  const {
+    data: isOwner,
+    isLoading,
+    error,
+  } = api.chat.isOwner.useQuery(
+    { chatId },
+    {
+      enabled: chatId !== "new" && !isNewChat,
+      retry: false,
+    }
+  );
+
   useEffect(() => {
     if (chatId === "new" || isNewChat) {
       setValidationStatus("valid");
       return;
     }
 
-    const checkChat = async () => {
-      const status = await validateChat(chatId);
-      setValidationStatus(status);
-    };
-
-    checkChat();
-  }, [chatId, isNewChat]);
+    if (isLoading) {
+      setValidationStatus("loading");
+    } else if (error) {
+      if (error.data?.code === "UNAUTHORIZED") {
+        setValidationStatus("unauthorized");
+      } else {
+        setValidationStatus("not_found");
+      }
+    } else if (isOwner === false) {
+      setValidationStatus("not_found");
+    } else if (isOwner === true) {
+      setValidationStatus("valid");
+    }
+  }, [chatId, isNewChat, isOwner, isLoading, error]);
 
   if (validationStatus === "loading") {
     return (

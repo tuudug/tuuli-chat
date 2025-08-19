@@ -16,11 +16,12 @@ export const createTRPCRouter = t.router;
 export const publicProcedure = t.procedure;
 
 const isAuthed = t.middleware(({ ctx, next }) => {
-  if (!ctx.user) {
+  if (!ctx.userId) {
     throw new Error("NOT_AUTHENTICATED");
   }
   return next({
     ctx: {
+      userId: ctx.userId,
       user: ctx.user,
     },
   });

@@ -13,9 +13,8 @@ import {
 } from "@/types";
 import { ChatSettings } from "@/types/settings";
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
-import { estimateTokenCount } from "@/lib/sparks";
 import { randomUUID } from "crypto";
-import { sparksRouter } from "./sparks";
+import { userRouter } from "./user";
 
 const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
@@ -73,13 +72,19 @@ const createSystemPrompt = (
   };
 };
 
-const sparksCaller = createCallerFactory(sparksRouter);
+const userCaller = createCallerFactory(userRouter);
 
 export const chatRouter = createTRPCRouter({
   isOwner: protectedProcedure
     .input(z.object({ chatId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
+      const { supabase, user, userId } = ctx;
+      if (!user || !userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
       const { chatId } = input;
 
       const { data, error } = await supabase
@@ -124,34 +129,26 @@ export const chatRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
-      const { messages, data } = input;
-      const supabaseServiceAdmin = createSupabaseServiceRoleClient();
-
-      const { data: userProfile, error: profileError } =
-        await supabaseServiceAdmin
-          .from("user_profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-
-      if (profileError && profileError.code !== "PGRST116") {
+      const { supabase, user, userId } = ctx;
+      if (!user || !userId) {
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch user profile.",
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
         });
       }
 
-      if (!userProfile) {
-        const { error: createProfileError } = await supabaseServiceAdmin
-          .from("user_profiles")
-          .insert({ id: user.id });
-        if (createProfileError) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to create user profile.",
-          });
-        }
+      const { messages, data } = input;
+      const supabaseServiceAdmin = createSupabaseServiceRoleClient();
+
+      // Check message limits using the user router
+      const caller = userCaller(ctx);
+      const limitCheck = await caller.checkMessageLimit();
+
+      if (!limitCheck.canSendMessage) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Daily message limit reached. You have used ${limitCheck.currentCount}/${limitCheck.limit} messages. Limit resets tomorrow.`,
+        });
       }
 
       const modelId = data?.modelId || "gemini-2.0-flash-lite";
@@ -193,23 +190,6 @@ export const chatRouter = createTRPCRouter({
 
       const lastUserMessage = messages[messages.length - 1];
       const userMessageContent = lastUserMessage.content || "";
-      const allConversationContent = messages.map((m) => m.content).join(" ");
-      const estimatedInputTokens = estimateTokenCount(allConversationContent);
-
-      // We need to call the tRPC procedure here
-      // const estimatedSparksCost = calculateSparksCost(
-      //   modelId,
-      //   estimatedInputTokens,
-      //   undefined,
-      //   data?.useSearch
-      // );
-
-      // if ((userProfile?.current_sparks || 0) < estimatedSparksCost) {
-      //   throw new TRPCError({
-      //     code: "INSUFFICIENT_FUNDS",
-      //     message: "Insufficient sparks",
-      //   });
-      // }
 
       // Build messages for LLM
       const messagesForLlm: Content[] = messages.map((msg) => ({
@@ -301,8 +281,6 @@ export const chatRouter = createTRPCRouter({
           }
         }
 
-        const completionTokens = estimateTokenCount(assistantResponseText);
-
         const { data: assistantMessageShell, error: shellError } =
           await supabaseServiceAdmin
             .from("messages")
@@ -340,14 +318,8 @@ export const chatRouter = createTRPCRouter({
           }
         }
 
-        const caller = sparksCaller(ctx);
-        const sparksResult = await caller.logAndSpend({
-          model_id: modelId,
-          prompt_tokens: estimatedInputTokens,
-          completion_tokens: completionTokens,
-          assistant_message_id: assistantMessageShell.id,
-          use_search: useSearch || false,
-        });
+        // Increment user's daily message count
+        await caller.incrementMessageCount();
 
         const finalAssistantMessage = {
           id: assistantMessageShell.id,
@@ -355,13 +327,11 @@ export const chatRouter = createTRPCRouter({
           content: assistantResponseText,
           created_at: new Date().toISOString(),
           model_used: modelId,
-          sparks_cost: sparksResult?.sparks_spent,
           search_references: searchReferences,
         };
 
         return {
           message: finalAssistantMessage,
-          newBalance: sparksResult?.new_balance,
         };
       } catch (err) {
         // On ANY error during generation or saving, persist an assistant error message
@@ -396,7 +366,6 @@ export const chatRouter = createTRPCRouter({
             model_used: modelId,
             usage_metadata: { error: true },
           },
-          newBalance: userProfile?.current_sparks ?? undefined,
         };
       }
     }),
@@ -409,16 +378,25 @@ export const chatRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
+      const { supabase, user, userId } = ctx;
+
+      if (!user || !userId) {
+        console.error("❌ User not authenticated");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
+
       const { clientChatId, title } = input;
 
       if (!title || title.trim().length === 0) {
+        console.error("❌ Missing or invalid title");
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Missing or invalid title",
         });
       }
-
       const { error: insertError } = await supabase.from("chats").insert({
         id: clientChatId,
         user_id: user.id,
@@ -426,18 +404,25 @@ export const chatRouter = createTRPCRouter({
       });
 
       if (insertError) {
+        console.error("❌ Chat insertion failed:", {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+        });
+
         if (insertError.code === "23505") {
           throw new TRPCError({
             code: "CONFLICT",
             message: "Chat ID already exists.",
           });
         }
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not create new chat shell",
+          message: `Could not create new chat shell: ${insertError.message}`,
         });
       }
-
       return {
         message: "Chat shell created successfully",
         chatId: clientChatId,
@@ -447,7 +432,13 @@ export const chatRouter = createTRPCRouter({
   delete: protectedProcedure
     .input(z.object({ chatId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
+      const { supabase, user, userId } = ctx;
+      if (!user || !userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
       const { chatId } = input;
 
       const { data: chat, error: fetchError } = await supabase
@@ -505,7 +496,13 @@ export const chatRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
+      const { supabase, user, userId } = ctx;
+      if (!user || !userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
       const { chatId, title } = input;
 
       const { data: chat, error: fetchError } = await supabase
@@ -557,7 +554,13 @@ export const chatRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
+      const { supabase, user, userId } = ctx;
+      if (!user || !userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
       const { chatId, userPrompt, assistantResponse } = input;
 
       const { data: chat, error: fetchError } = await supabase
@@ -641,7 +644,13 @@ Title:`;
       })
     )
     .query(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
+      const { supabase, user, userId } = ctx;
+      if (!user || !userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated",
+        });
+      }
       const { chatId, limit, before } = input;
 
       const { data: chat, error: chatError } = await supabase
@@ -692,34 +701,28 @@ Title:`;
         messages,
       };
     }),
-  historyList: protectedProcedure
-    .input(z.object({ pin: z.string().optional() }))
-    .query(async ({ ctx, input }) => {
-      const { supabase, user } = ctx;
-      const { pin } = input;
+  historyList: protectedProcedure.input(z.object({})).query(async ({ ctx }) => {
+    const { supabase, user, userId } = ctx;
+    if (!user || !userId) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not authenticated",
+      });
+    }
 
-      // This is a simplified authentication check.
-      // In a real application, you would have a more robust system for pin validation.
-      if (process.env.APP_PIN && pin !== process.env.APP_PIN) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid PIN",
-        });
-      }
+    const { data: chats, error } = await supabase
+      .from("chats")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
 
-      const { data: chats, error } = await supabase
-        .from("chats")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+    if (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch chat history",
+      });
+    }
 
-      if (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch chat history",
-        });
-      }
-
-      return chats;
-    }),
+    return chats;
+  }),
 });

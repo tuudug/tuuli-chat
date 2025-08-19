@@ -10,6 +10,8 @@
     "sync:types": "supabase gen types typescript --project-id iacncoasiljzbhuuxawl > src/types/supabase.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.31.2",
+    "@clerk/themes": "^2.4.11",
     "@google/genai": "^1.8.0",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-icons": "^1.3.2",

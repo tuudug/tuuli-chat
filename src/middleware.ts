@@ -1,54 +1,75 @@
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 
-export async function middleware(request: NextRequest) {
-  // Create a Supabase client for auth
+const isProtectedRoute = createRouteMatcher(["/chat(.*)"]);
+
+export default clerkMiddleware(async (auth, req) => {
+  const { userId, getToken } = await auth();
+
+  // If user is authenticated AND on the root path, redirect to /chat/new
+  if (userId && req.nextUrl.pathname === "/") {
+    return NextResponse.redirect(new URL("/chat/new", req.url));
+  }
+
+  // If the user is not authenticated AND is trying to access protected routes, redirect to homepage
+  if (!userId && isProtectedRoute(req)) {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  // Supabase-Clerk integration: Pass Clerk session token to Supabase
+  let response = NextResponse.next({
+    request: {
+      headers: req.headers,
+    },
+  });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return req.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            req.cookies.set(name, value)
+          );
+          response = NextResponse.next({
+            request: {
+              headers: req.headers,
+            },
           });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: "",
-            ...options,
-          });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
         },
       },
     }
   );
 
-  // Check if user is authenticated
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // If user is authenticated AND on the root path, redirect to /chat/new
-  if (user && request.nextUrl.pathname === "/") {
-    return NextResponse.redirect(new URL("/chat/new", request.url));
+  // If user is authenticated, get the Clerk token and set it in Supabase
+  if (userId) {
+    const token = await getToken({ template: "supabase" });
+    if (token) {
+      // Set the custom JWT token in Supabase session
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: "mock_refresh_token", // Required but not used with custom tokens
+      });
+    }
   }
 
-  // If the user is not authenticated AND is trying to access /chat, redirect to homepage
-  if (!user && request.nextUrl.pathname.startsWith("/chat")) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  return NextResponse.next();
-}
+  return response;
+});
 
 export const config = {
   // Run middleware on the root and chat routes
-  matcher: ["/", "/chat/:path*"],
+  matcher: [
+    // Skip Next.js internals and all static files
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
+  ],
 };

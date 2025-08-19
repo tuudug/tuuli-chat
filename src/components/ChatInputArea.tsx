@@ -11,10 +11,8 @@ import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
 import { ChatSettings } from "@/types/settings";
 import ModelSelector from "./ModelSelector";
-import SparksCostIndicator from "./SparksCostIndicator";
 import AdvancedChatSettings from "./AdvancedChatSettings";
 import ToolsSelector from "./ToolsSelector";
-import { usePin } from "@/contexts/PinContext";
 
 // Custom hook to get the previous value of a prop or state
 function usePrevious(value: boolean) {
@@ -38,8 +36,6 @@ interface ChatInputAreaProps {
   selectedModel: GeminiModelId; // Use GeminiModelId
   setSelectedModel: (model: GeminiModelId) => void; // Use GeminiModelId
   isWaitingForResponse: boolean;
-  messages?: Array<{ content: string }>; // Add messages for sparks calculation
-  userSparks?: number; // Add user sparks balance
   favoriteModel: GeminiModelId | null;
   onSetFavoriteModel: (modelId: GeminiModelId) => void;
   chatSettings: ChatSettings;
@@ -53,14 +49,11 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   selectedModel,
   setSelectedModel,
   isWaitingForResponse,
-  messages = [],
-  userSparks = 0,
   favoriteModel,
   onSetFavoriteModel,
   chatSettings,
   setChatSettings,
 }) => {
-  const { isPinValidated } = usePin();
   const [useSearch, setUseSearch] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
@@ -172,9 +165,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   };
 
-  // Extract message content for sparks calculation
-  const messageContents = messages.map((msg) => msg.content);
-
   // --- Form-level Drag and Drop Handlers (for actual file dropping) ---
   const handleFormDragOver = (e: React.DragEvent<HTMLFormElement>) => {
     e.preventDefault(); // Necessary to allow dropping
@@ -197,11 +187,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   return (
     <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full sm:mb-4">
-      <div
-        className={`relative transition-opacity duration-300 ${
-          !isPinValidated ? "opacity-50 pointer-events-none" : "opacity-100"
-        }`}
-      >
+      <div className={`relative transition-opacity duration-300 opacity-100`}>
         <form
           onSubmit={onFormSubmit}
           onDragOver={handleFormDragOver}
@@ -321,16 +307,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               disabled={isWaitingForResponse}
               onKeyDown={handleKeyDown}
             />
-            {/* Sparks Cost Indicator - Inline before send button */}
-            <div className="relative">
-              <SparksCostIndicator
-                messages={messageContents}
-                currentMessage={input}
-                selectedModel={selectedModel}
-                userSparks={userSparks}
-                useSearch={useSearch && supportsSearch}
-              />
-            </div>
+
             {/* Send Button */}
             <motion.button
               type="submit"

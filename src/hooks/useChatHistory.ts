@@ -1,11 +1,12 @@
 "use client";
 
-import { usePin } from "@/contexts/PinContext";
 import { createClient } from "@/lib/supabase/client";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { api } from "@/lib/trpc/client";
 import { Tables } from "@/types/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 const supabase = createClient();
 
@@ -17,7 +18,7 @@ const subscriptionState: {
   status: "idle",
 };
 
-const setupSubscription = async () => {
+const setupSubscription = async (getToken?: () => Promise<string | null>) => {
   if (
     subscriptionState.status === "subscribed" ||
     subscriptionState.status === "subscribing"
@@ -28,12 +29,24 @@ const setupSubscription = async () => {
   subscriptionState.status = "subscribing";
 
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      subscriptionState.status = "idle";
-      return;
+    // Use Clerk JWT if available, otherwise fall back to regular client
+    let clientToUse = supabase;
+
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        clientToUse = createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            global: {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          }
+        );
+      }
     }
 
     const handleNewChat = (payload: { new: Tables<"chats"> }) => {
@@ -48,7 +61,9 @@ const setupSubscription = async () => {
       );
     };
 
-    const channel = supabase
+    // Note: For realtime subscriptions with RLS, we need proper JWT authentication
+    // The subscription will be filtered server-side based on RLS policies
+    const channel = clientToUse
       .channel("chat-history-changes")
       .on(
         "postgres_changes",
@@ -56,7 +71,6 @@ const setupSubscription = async () => {
           event: "INSERT",
           schema: "public",
           table: "chats",
-          filter: `user_id=eq.${user.id}`,
         },
         handleNewChat
       )
@@ -66,7 +80,6 @@ const setupSubscription = async () => {
           event: "UPDATE",
           schema: "public",
           table: "chats",
-          filter: `user_id=eq.${user.id}`,
         },
         handleUpdatedChat
       )
@@ -90,27 +103,18 @@ const setupSubscription = async () => {
 };
 
 export const useChatHistory = () => {
-  const { isPinValidated, storedPin } = usePin();
-
+  const { getToken } = useAuth();
   const {
     data: chats,
     isLoading: loading,
     error,
     refetch,
-  } = api.chat.historyList.useQuery(
-    {
-      pin: storedPin || undefined,
-    },
-    {
-      enabled: isPinValidated,
-    }
-  );
+  } = api.chat.historyList.useQuery({});
 
   useEffect(() => {
-    if (isPinValidated) {
-      setupSubscription();
-    }
-  }, [isPinValidated]);
+    const tokenGetter = () => getToken({ template: "supabase" });
+    setupSubscription(tokenGetter);
+  }, [getToken]);
 
   useEffect(() => {
     const handleInsert = () => refetch();
@@ -129,7 +133,7 @@ export const useChatHistory = () => {
   }, [refetch]);
 
   return {
-    chats: isPinValidated ? chats || [] : [],
+    chats: chats || [],
     loading,
     error: error ? error.message : null,
     refetch,

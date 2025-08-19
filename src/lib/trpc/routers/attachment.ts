@@ -24,6 +24,13 @@ export const attachmentRouter = createTRPCRouter({
       const { fileContent, fileName, fileType, chatId } = input;
       const supabaseServiceAdmin = createSupabaseServiceRoleClient();
 
+      if (!user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated.",
+        });
+      }
+
       if (!fileContent.includes(",")) {
         throw new TRPCError({
           code: "BAD_REQUEST",

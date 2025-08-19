@@ -10,7 +10,7 @@ import remarkGfm from "remark-gfm";
 import "katex/dist/katex.min.css";
 import { UserIcon, BotIcon, CopyIcon, CheckIcon } from "lucide-react";
 import { Message, MODEL_DETAILS } from "@/types";
-import FinalSparksCost from "./FinalSparksCost";
+
 import SearchReferences from "./chat/SearchReferences";
 
 interface ChatMessageProps {
@@ -82,8 +82,6 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
         minute: "2-digit",
       })
     : "";
-
-  const sparksCost = message.sparks_cost;
 
   // Gradient border style for Pro model
   const proBorderStyle = isProModel
@@ -300,12 +298,6 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
             {modelName && <span className="font-medium">{modelName}</span>}
             {modelName && timestamp && <span>•</span>}
             <span>{timestamp}</span>
-            {!isUser && sparksCost && sparksCost > 0 && (
-              <>
-                <span>•</span>
-                <FinalSparksCost cost={sparksCost} />
-              </>
-            )}
           </div>
         </div>
         {isUser && (

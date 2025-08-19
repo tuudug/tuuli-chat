@@ -2,10 +2,8 @@
 
 import { DATE_RANGE_OPTIONS, DateRangeValue } from "@/lib/constants";
 import { api } from "@/lib/trpc/client";
-import type { Database } from "@/types/supabase";
 import { ExclamationTriangleIcon, ReloadIcon } from "@radix-ui/react-icons";
 import * as Tabs from "@radix-ui/react-tabs";
-import { createBrowserClient } from "@supabase/ssr"; // Updated import
 import { useEffect, useState } from "react";
 import {
   Area,
@@ -23,6 +21,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useUser } from "@clerk/nextjs";
+import { createClient } from "@/lib/supabase/client";
 
 // interface AnalyticsData {
 //   // Original data
@@ -92,28 +92,28 @@ const AnalyticsPage = () => {
   const [checkingAdminStatus, setCheckingAdminStatus] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Updated Supabase client creation for client components
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Use Clerk for authentication
+  const { user, isLoaded } = useUser();
+  const supabase = createClient(); // Simple client - Clerk integration handles auth
 
   useEffect(() => {
     const checkAdminStatus = async () => {
+      if (!isLoaded) return;
+
       setCheckingAdminStatus(true);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
+
+      if (!user) {
         setIsUserAdmin(false);
         setCheckingAdminStatus(false);
         setAuthError("Not authenticated. Please log in.");
         return;
       }
+
+      // Simple Supabase call - Clerk integration handles authentication
       const { data: profile, error: profileError } = await supabase
         .from("user_profiles")
         .select("is_verified")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .single();
 
       if (profileError || !profile) {
@@ -128,7 +128,7 @@ const AnalyticsPage = () => {
       setCheckingAdminStatus(false);
     };
     checkAdminStatus();
-  }, [supabase]);
+  }, [user, isLoaded, supabase]);
 
   const {
     data: analyticsData,

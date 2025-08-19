@@ -17,9 +17,16 @@ export const analyticsRouter = createTRPCRouter({
       const { supabase, user } = ctx;
       const { dateRange } = input;
 
+      if (!user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not authenticated.",
+        });
+      }
+
       const { data: userProfile, error: profileError } = await supabase
         .from("user_profiles")
-        .select("is_verified")
+        .select("tier")
         .eq("id", user.id)
         .single();
 
@@ -30,10 +37,10 @@ export const analyticsRouter = createTRPCRouter({
         });
       }
 
-      if (!userProfile.is_verified) {
+      if (userProfile.tier !== "premium") {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "User is not verified.",
+          message: "Premium access required.",
         });
       }
 
