@@ -115,6 +115,27 @@ export async function POST(req: NextRequest) {
           attachment_type: requestData?.attachment_type,
         });
 
+        // --- START OF SEARCH LOGIC ---
+        const today = new Date().toLocaleDateString("en-US", {
+          timeZone: "America/Los_Angeles",
+        });
+
+        const { data: usageData, error: usageError } =
+          await supabaseServiceAdmin
+            .from("grounding_api_usage")
+            .select("call_count, is_disabled")
+            .eq("date", today)
+            .single();
+
+        if (usageError && usageError.code !== "PGRST116") {
+          console.error("Error fetching search usage:", usageError);
+        }
+
+        const isSearchDisabled =
+          usageData?.is_disabled || (usageData?.call_count || 0) >= 1450;
+        const useSearch = requestData?.useSearch && !isSearchDisabled;
+        // --- END OF SEARCH LOGIC ---
+
         // Prepare system prompt and call LLM
         const systemPromptObject = createSystemPrompt(modelId, chatSettings);
         const systemPromptText =
@@ -153,16 +174,25 @@ export async function POST(req: NextRequest) {
           ...messagesForLlm,
         ];
 
+        // --- START of LLM Call modification ---
+        const groundingTool = {
+          googleSearch: {},
+        };
+
         const resultStream = await genAI.models.generateContentStream({
           config: {
             temperature: chatSettings.temperature,
+            // Only include tools if useSearch is true
+            ...(useSearch && { tools: [groundingTool] }),
           },
           model: modelId,
           contents: contentsForLlm,
         });
+        // --- END of LLM Call modification ---
 
         let assistantResponseText = "";
         const assistantMessageId = randomUUID();
+        let searchReferences: { url: string; title: string }[] = [];
 
         await sendEvent("messageStart", {
           id: assistantMessageId,
@@ -190,6 +220,28 @@ export async function POST(req: NextRequest) {
               }
             }
           }
+
+          // --- START of grounding metadata processing ---
+          if (chunk.candidates?.[0]?.finishReason === "STOP") {
+            const groundingChunks =
+              chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            if (Array.isArray(groundingChunks)) {
+              searchReferences = groundingChunks
+                .map((refChunk) => {
+                  if (refChunk.web && refChunk.web.uri && refChunk.web.title) {
+                    return {
+                      url: refChunk.web.uri,
+                      title: refChunk.web.title,
+                    };
+                  }
+                  return null;
+                })
+                .filter(
+                  (ref): ref is { url: string; title: string } => ref !== null
+                );
+            }
+          }
+          // --- END of grounding metadata processing ---
         }
 
         // Save the complete assistant message
@@ -202,6 +254,7 @@ export async function POST(req: NextRequest) {
               role: "assistant",
               content: assistantResponseText,
               model_used: modelId,
+              search_references: searchReferences, // Save references
             })
             .select("id")
             .single();
@@ -213,6 +266,25 @@ export async function POST(req: NextRequest) {
           return;
         }
 
+        // --- START of search usage update ---
+        if (searchReferences.length > 0) {
+          const { error: newUsageError } = await supabaseServiceAdmin
+            .from("grounding_api_usage")
+            .upsert(
+              {
+                date: today,
+                call_count: (usageData?.call_count || 0) + 1,
+                is_disabled: (usageData?.call_count || 0) + 1 >= 1450,
+              },
+              { onConflict: "date" }
+            );
+          if (newUsageError) {
+            // Log this error but don't block the user response
+            console.error("Error updating search usage:", newUsageError);
+          }
+        }
+        // --- END of search usage update ---
+
         // Send completion event
         await sendEvent("messageComplete", {
           id: assistantMessageShell.id,
@@ -220,6 +292,7 @@ export async function POST(req: NextRequest) {
           content: assistantResponseText,
           created_at: new Date().toISOString(),
           model_used: modelId,
+          search_references: searchReferences, // Send references to client
         });
 
         await sendEvent("done", {});

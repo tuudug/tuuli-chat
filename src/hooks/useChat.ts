@@ -440,6 +440,7 @@ export const useChat = (chatId: string) => {
                     const finalMessage: Message = {
                       ...streamingMessageRef,
                       content: parsedData.content,
+                      search_references: parsedData.search_references,
                       isNew: true,
                     };
 
