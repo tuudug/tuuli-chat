@@ -16,9 +16,14 @@ import SearchReferences from "./chat/SearchReferences";
 interface ChatMessageProps {
   message: Message; // Expect our Message type
   userAvatar?: string | null;
+  isStreaming?: boolean;
 }
 
-export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
+export default function ChatMessage({
+  message,
+  userAvatar,
+  isStreaming = false,
+}: ChatMessageProps) {
   const isUser = message.role === "user";
 
   const isProModel =
@@ -281,7 +286,7 @@ export default function ChatMessage({ message, userAvatar }: ChatMessageProps) {
                     rehypePlugins={[rehypeKatex]}
                     components={components}
                   >
-                    {contentToRender}
+                    {contentToRender + (isStreaming ? " ●" : "")}
                   </ReactMarkdown>
                   {message.search_references && (
                     <SearchReferences references={message.search_references} />

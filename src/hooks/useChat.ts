@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
+
 import { v4 as uuidv4 } from "uuid";
 import {
   Message,
@@ -23,14 +23,9 @@ type AttachmentApiData = {
 
 export const useChat = (chatId: string) => {
   const createChatMutation = api.chat.create.useMutation();
-  const sendMessageMutation = api.chat.sendMessage.useMutation();
   const generateTitleMutation = api.chat.generateTitle.useMutation();
   const uploadAttachmentMutation = api.attachment.upload.useMutation();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { user } = useUser();
-  const isNewChatFlowFromParams = searchParams.get("newChat") === "true";
-  const processedNewChatIdRef = useRef<string | null>(null);
   const utils = api.useUtils();
 
   // State Management
@@ -52,6 +47,9 @@ export const useChat = (chatId: string) => {
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Streaming States
+  const [isStreaming, setIsStreaming] = useState(false);
+
   // New state for handling new chat creation
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
 
@@ -70,7 +68,7 @@ export const useChat = (chatId: string) => {
   } = api.chat.history.useQuery(
     { chatId, limit: 10 },
     {
-      enabled: !!chatId && chatId !== "new" && !isNewChatFlowFromParams,
+      enabled: !!chatId && chatId !== "new",
     }
   );
 
@@ -110,89 +108,30 @@ export const useChat = (chatId: string) => {
     }
   }, [chatId, favoriteModel]);
 
-  // Effect for handling the newChat=true flow
+  // Listen for reset-to-new-chat event from sidebar
   useEffect(() => {
-    const initializeNewChat = async () => {
-      if (isNewChatFlowFromParams && chatId && chatId !== "new") {
-        if (processedNewChatIdRef.current === chatId) return;
+    const handleResetToNewChat = () => {
+      console.log("🔄 Received reset-to-new-chat event, resetting state...");
 
-        const storageKey = `chat_init_${chatId}`;
-        const storedDataString = sessionStorage.getItem(storageKey);
+      // Reset all relevant state
+      setMessages([]);
+      setChatTitle("New Conversation");
+      setInput("");
+      setError(null);
+      setIsLoading(false);
+      setIsStreaming(false);
+      setPendingChatId(null);
+      setEffectiveChatId("new");
 
-        if (storedDataString) {
-          processedNewChatIdRef.current = chatId;
-          try {
-            const storedData = JSON.parse(storedDataString) as {
-              message: string;
-              model: GeminiModelId;
-              attachmentInfo?: AttachmentApiData;
-            };
-
-            setChatTitle("New Conversation");
-            setSelectedModel(storedData.model);
-
-            const userMessage: Message = {
-              id: uuidv4(),
-              role: "user",
-              content: storedData.message,
-              created_at: new Date().toISOString(),
-              timestamp: new Date(),
-              attachment_name: storedData.attachmentInfo?.attachment_name,
-              attachment_type: storedData.attachmentInfo?.attachment_type,
-              attachment_preview: storedData.attachmentInfo?.attachment_content,
-            };
-
-            setMessages([userMessage]);
-            setIsLoading(true);
-
-            const data = await sendMessageMutation.mutateAsync({
-              messages: [userMessage],
-              data: {
-                modelId: storedData.model,
-                chatId: chatId,
-                chatSettings: chatSettings,
-                ...storedData.attachmentInfo,
-                useSearch: false,
-              },
-            });
-
-            const assistantMessage = data.message as Message;
-            setMessages((prev) => [
-              ...prev,
-              { ...assistantMessage, isNew: true },
-            ]);
-
-            if (userMessage.content) {
-              await generateTitleMutation.mutateAsync({
-                chatId,
-                userPrompt: userMessage.content,
-                assistantResponse: assistantMessage.content,
-              });
-            }
-          } catch (err) {
-            setError(
-              err instanceof Error
-                ? err.message
-                : "An unknown error occurred during chat initialization."
-            );
-          } finally {
-            setIsLoading(false);
-            sessionStorage.removeItem(storageKey);
-            router.replace(`/chat/${chatId}`);
-          }
-        }
-      }
+      console.log("✅ Chat state reset to clean new chat state");
     };
 
-    initializeNewChat();
-  }, [
-    chatId,
-    isNewChatFlowFromParams,
-    chatSettings,
-    sendMessageMutation,
-    generateTitleMutation,
-    router,
-  ]);
+    window.addEventListener("reset-to-new-chat", handleResetToNewChat);
+
+    return () => {
+      window.removeEventListener("reset-to-new-chat", handleResetToNewChat);
+    };
+  }, []);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -223,7 +162,25 @@ export const useChat = (chatId: string) => {
           title: "New Conversation",
         });
 
-        let attachmentInfo: AttachmentApiData | undefined;
+        // Update effective chat ID immediately to avoid re-triggering this flow
+        setEffectiveChatId(newClientChatId);
+
+        // Update browser history without navigation/re-render
+        const newUrl = `/chat/${newClientChatId}`;
+        window.history.replaceState(null, "", newUrl);
+
+        // Dispatch event to immediately update sidebar (fallback for realtime)
+        window.dispatchEvent(
+          new CustomEvent("chat-history-insert", {
+            detail: {
+              id: newClientChatId,
+              title: "New Conversation",
+              created_at: new Date().toISOString(),
+            },
+          })
+        );
+
+        let attachmentDataForApi: Partial<AttachmentApiData> = {};
         if (attachmentFile) {
           const fileContent = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -237,7 +194,7 @@ export const useChat = (chatId: string) => {
             fileType: attachmentFile.type,
             chatId: newClientChatId,
           });
-          attachmentInfo = {
+          attachmentDataForApi = {
             attachment_url: uploadResult.publicUrl,
             attachment_content: fileContent,
             attachment_name: uploadResult.name,
@@ -245,22 +202,38 @@ export const useChat = (chatId: string) => {
           };
         }
 
-        const storageKey = `chat_init_${newClientChatId}`;
-        sessionStorage.setItem(
-          storageKey,
-          JSON.stringify({
-            message: currentInput,
-            model: selectedModel,
-            attachmentInfo,
-          })
-        );
+        const userMessage: Message = {
+          id: uuidv4(),
+          role: "user",
+          content: currentInput,
+          created_at: new Date().toISOString(),
+          timestamp: new Date(),
+          ...(attachmentFile && {
+            attachment_name: attachmentFile.name,
+            attachment_type: attachmentFile.type,
+            attachment_preview: attachmentDataForApi.attachment_url,
+          }),
+        };
 
-        router.push(`/chat/${newClientChatId}?newChat=true`);
+        const newMessages: Message[] = [userMessage];
+        setMessages(newMessages);
+        setInput("");
+
+        // Continue with sending the message to the new chat using streaming
+        await streamMessage(newMessages, {
+          modelId: selectedModel,
+          chatId: newClientChatId,
+          chatSettings: chatSettings,
+          ...attachmentDataForApi,
+          useSearch,
+        });
+        setIsLoading(false);
+        return;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to create chat.");
         setIsLoading(false);
+        return;
       }
-      return;
     }
 
     // Handle existing chat message sending
@@ -310,33 +283,16 @@ export const useChat = (chatId: string) => {
     setMessages(newMessages);
     setInput("");
 
-    sendMessageMutation.mutate(
-      {
-        messages: newMessages,
-        data: {
-          modelId: selectedModel,
-          chatId: effectiveChatId,
-          chatSettings: chatSettings,
-          ...attachmentDataForApi,
-          useSearch,
-        },
-      },
-      {
-        onSuccess: (data) => {
-          const assistantMessage = data.message as Message;
-          setMessages((prev) => [
-            ...prev,
-            { ...assistantMessage, isNew: true },
-          ]);
-        },
-        onError: (err) => {
-          setError(err.message);
-        },
-        onSettled: () => {
-          setIsLoading(false);
-        },
-      }
-    );
+    // Use streaming for better user experience
+    await streamMessage(newMessages, {
+      modelId: selectedModel,
+      chatId: effectiveChatId,
+      chatSettings: chatSettings,
+      ...attachmentDataForApi,
+      useSearch,
+    });
+
+    setIsLoading(false);
   };
 
   const handleExampleQuestionClick = (question: string) => {
@@ -366,6 +322,213 @@ export const useChat = (chatId: string) => {
     }
   };
 
+  // Streaming function to handle real-time message updates
+  const streamMessage = async (
+    messagesForStreaming: Message[],
+    requestData: {
+      modelId: GeminiModelId;
+      chatId: string;
+      chatSettings: ChatSettings;
+      attachment_url?: string;
+      attachment_content?: string;
+      attachment_name?: string;
+      attachment_type?: string;
+      useSearch?: boolean;
+    }
+  ) => {
+    setIsStreaming(true);
+    setError(null);
+
+    // Capture the chat ID for title generation
+    const chatIdForTitleGeneration = requestData.chatId;
+
+    try {
+      // First, send the request data to initialize streaming
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: messagesForStreaming,
+          data: requestData,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("Failed to get response reader");
+      }
+
+      let currentStreamingMessage: Message | null = null;
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE messages
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || ""; // Keep the incomplete message in buffer
+
+        for (const message of lines) {
+          if (!message.trim()) continue;
+
+          const lines = message.split("\n");
+          let eventType = "";
+          let data = "";
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.substring(7);
+            } else if (line.startsWith("data: ")) {
+              data = line.substring(6);
+            }
+          }
+
+          if (eventType && data) {
+            try {
+              const parsedData = JSON.parse(data);
+
+              switch (eventType) {
+                case "messageStart":
+                  currentStreamingMessage = {
+                    id: parsedData.id,
+                    role: "assistant",
+                    content: "",
+                    created_at: parsedData.created_at,
+                    timestamp: new Date(parsedData.created_at),
+                    model_used: parsedData.model_used,
+                  };
+                  // Add streaming message directly to messages array to avoid double animation
+                  setMessages((prev) => [...prev, currentStreamingMessage!]);
+                  break;
+
+                case "chunk":
+                  if (currentStreamingMessage) {
+                    // Capture the streaming message to prevent race conditions
+                    const streamingMessageRef = currentStreamingMessage;
+                    const updatedMessage: Message = {
+                      ...streamingMessageRef,
+                      content: streamingMessageRef.content + parsedData.text,
+                    };
+                    currentStreamingMessage = updatedMessage;
+
+                    // Update the message in place in the messages array
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamingMessageRef.id ? updatedMessage : msg
+                      )
+                    );
+                  }
+                  break;
+
+                case "messageComplete":
+                  // Just update the final content and mark as complete
+                  if (currentStreamingMessage) {
+                    // Capture the streaming message to prevent race conditions
+                    const streamingMessageRef = currentStreamingMessage;
+                    // Use the captured chat ID for title generation
+                    const finalMessage: Message = {
+                      ...streamingMessageRef,
+                      content: parsedData.content,
+                      isNew: true,
+                    };
+
+                    // Update the message in place - no add/remove, no animation
+                    setMessages((prev) => {
+                      const updatedMessages = prev.map((msg) =>
+                        msg.id === streamingMessageRef.id ? finalMessage : msg
+                      );
+
+                      // Generate title for new chats after first assistant response
+                      const assistantMessages = updatedMessages.filter(
+                        (m) => m.role === "assistant"
+                      );
+                      const userMessages = updatedMessages.filter(
+                        (m) => m.role === "user"
+                      );
+
+                      // Only generate title if this is the first assistant message and we have user content
+                      if (
+                        assistantMessages.length === 1 &&
+                        userMessages.length >= 1
+                      ) {
+                        const userPrompt =
+                          userMessages[userMessages.length - 1]?.content;
+                        const assistantResponse = parsedData.content;
+
+                        if (
+                          userPrompt &&
+                          assistantResponse &&
+                          chatIdForTitleGeneration !== "new"
+                        ) {
+                          // Generate title asynchronously (don't await to avoid blocking UI)
+                          generateTitleMutation
+                            .mutateAsync({
+                              chatId: chatIdForTitleGeneration,
+                              userPrompt,
+                              assistantResponse,
+                            })
+                            .then((result) => {
+                              console.log("Title generated:", result.newTitle);
+                              setChatTitle(result.newTitle);
+
+                              // Also trigger sidebar update
+                              window.dispatchEvent(
+                                new CustomEvent("chat-history-update", {
+                                  detail: {
+                                    id: chatIdForTitleGeneration,
+                                    title: result.newTitle,
+                                  },
+                                })
+                              );
+                            })
+                            .catch((err) => {
+                              console.error("Failed to generate title:", err);
+                            });
+                        }
+                      }
+
+                      return updatedMessages;
+                    });
+                    currentStreamingMessage = null;
+                  }
+                  break;
+
+                case "error":
+                  throw new Error(
+                    parsedData.message || "Streaming error occurred"
+                  );
+
+                case "done":
+                  // Streaming completed successfully
+                  break;
+              }
+            } catch (parseError) {
+              console.error("Error parsing SSE data:", parseError);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Streaming error:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to stream response"
+      );
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
   return {
     messages,
     chatTitle,
@@ -374,8 +537,9 @@ export const useChat = (chatId: string) => {
     chatSettings,
     favoriteModel,
     isLoading,
+    isStreaming,
     initialFetchLoading,
-    isAwaitingFirstToken: isLoading, // Simplified for sync flow
+    isAwaitingFirstToken: isStreaming, // Updated for streaming flow
     error,
     setChatTitle,
     handleInputChange,
@@ -384,7 +548,7 @@ export const useChat = (chatId: string) => {
     setChatSettings,
     setFavoriteModel,
     handleExampleQuestionClick,
-    isNewChatFlow: isNewChatFlowFromParams,
+    isNewChatFlow: false, // No longer used since we have smooth navigation
     uiReadyForNewChat: true, // Always show UI now
     userAvatar: user?.imageUrl,
     pendingChatId, // Expose this for any UI needs

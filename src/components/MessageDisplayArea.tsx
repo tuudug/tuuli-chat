@@ -50,20 +50,34 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
     const currentFirst = messages[0].created_at;
     const currentLast = messages[messages.length - 1].created_at;
 
-    const wasPrepend =
-      prevFirstTimestampRef.current !== null &&
-      new Date(currentFirst) < new Date(prevFirstTimestampRef.current);
-
-    const wasAppend =
-      prevLastTimestampRef.current === null ||
-      new Date(currentLast) > new Date(prevLastTimestampRef.current);
-
-    if (wasAppend && !wasPrepend) {
-      viewport.scrollTop = viewport.scrollHeight;
+    // Scroll to bottom for new messages (but not when loading more from the top)
+    if (
+      currentLast !== prevLastTimestampRef.current &&
+      currentFirst === prevFirstTimestampRef.current
+    ) {
+      setTimeout(() => {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: "smooth",
+        });
+      }, 100);
     }
 
     prevFirstTimestampRef.current = currentFirst;
     prevLastTimestampRef.current = currentLast;
+  }, [messages]);
+
+  // Auto-scroll when messages update (including streaming)
+  useEffect(() => {
+    const viewport = scrollAreaViewportRef.current;
+    if (viewport && messages.length > 0) {
+      setTimeout(() => {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: "smooth",
+        });
+      }, 10);
+    }
   }, [messages]);
 
   const handleLoadMore = async () => {
@@ -165,32 +179,46 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
                 </div>
               )}
               <AnimatePresence>
-                {messages.map((msg, index) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{
-                      duration: 0.2,
-                      delay: index * 0.02,
-                    }}
-                  >
-                    <ChatMessage message={msg} userAvatar={userAvatar} />
-                  </motion.div>
-                ))}
+                {messages.map((msg, index) => {
+                  // Check if this is the last assistant message and we're currently streaming
+                  const isStreaming =
+                    index === messages.length - 1 &&
+                    msg.role === "assistant" &&
+                    isAwaitingFirstToken;
+
+                  return (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{
+                        duration: 0.2,
+                        delay: index * 0.02,
+                      }}
+                    >
+                      <ChatMessage
+                        message={msg}
+                        userAvatar={userAvatar}
+                        isStreaming={isStreaming}
+                      />
+                    </motion.div>
+                  );
+                })}
               </AnimatePresence>
               <AnimatePresence>
-                {isAwaitingFirstToken && messages.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <TypingIndicator />
-                  </motion.div>
-                )}
+                {isAwaitingFirstToken &&
+                  messages.length > 0 &&
+                  messages[messages.length - 1].role === "user" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <TypingIndicator />
+                    </motion.div>
+                  )}
               </AnimatePresence>
             </div>
           )}

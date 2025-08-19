@@ -26,6 +26,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     chatSettings,
     setChatSettings,
     isLoading,
+    isStreaming,
     error,
     initialFetchLoading,
     isAwaitingFirstToken,
@@ -79,7 +80,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         initialFetchLoading={initialFetchLoading}
         initialMessagesError={error}
         isAwaitingFirstToken={isAwaitingFirstToken}
-        isOverallLoading={isLoading}
+        isOverallLoading={isLoading || isStreaming}
         responseError={error}
         onExampleQuestionClick={handleExampleQuestionClick}
         selectedModel={selectedModel}
