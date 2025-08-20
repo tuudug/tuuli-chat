@@ -80,6 +80,54 @@ async function ensureUserProfileExists(userId: string) {
   return existingProfile;
 }
 
+export async function handleMessageLimit(userId: string) {
+  const userProfile = await ensureUserProfileExists(userId);
+
+  // Check if we need to reset daily count
+  const lastReset = new Date(userProfile.last_message_reset_at);
+  const now = new Date();
+  const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+  let currentCount = userProfile.daily_message_count;
+  if (isNewDay) {
+    currentCount = 0;
+  }
+
+  // Check if user can send message
+  const tier = userProfile.tier as UserTier;
+  const limit = MESSAGE_LIMITS[tier] || MESSAGE_LIMITS[USER_TIERS.BASIC];
+  const canSendMessage = currentCount < limit;
+
+  if (!canSendMessage) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You have exceeded your daily message limit.",
+    });
+  }
+
+  // Increment the count
+  const newCount = isNewDay ? 1 : currentCount + 1;
+  const supabaseAdmin = createSupabaseServiceRoleClient();
+  const { error: updateError } = await supabaseAdmin
+    .from("user_profiles")
+    .update({
+      daily_message_count: newCount,
+      last_message_reset_at: isNewDay
+        ? now.toISOString()
+        : userProfile.last_message_reset_at,
+    })
+    .eq("id", userId);
+
+  if (updateError) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to update message count.",
+    });
+  }
+
+  return { success: true, newCount, limit };
+}
+
 export const userRouter = createTRPCRouter({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const { user, userId } = ctx;

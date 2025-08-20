@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { GeminiModelId, ChatSettings } from "@/types";
 import { randomUUID } from "crypto";
+import { handleMessageLimit } from "@/lib/trpc/routers/user";
 
 const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
@@ -50,6 +51,9 @@ export async function POST(req: NextRequest) {
     if (!user || !userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    // Handle message limit logic
+    await handleMessageLimit(userId);
 
     // Get the Clerk JWT token to pass to Supabase for RLS
     const clerkToken = await getToken({ template: "supabase" });
