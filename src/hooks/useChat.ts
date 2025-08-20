@@ -13,6 +13,7 @@ import { ChatSettings, DEFAULT_CHAT_SETTINGS } from "@/types/settings";
 import { api } from "@/lib/trpc/client";
 import { useUser } from "@clerk/nextjs";
 import { useLocalStorage } from "./useLocalStorage";
+import { useMessageLimit } from "@/contexts/MessageLimitContext";
 
 type AttachmentApiData = {
   attachment_url: string;
@@ -27,6 +28,7 @@ export const useChat = (chatId: string) => {
   const uploadAttachmentMutation = api.attachment.upload.useMutation();
   const { user } = useUser();
   const utils = api.useUtils();
+  const { refetch: refetchMessageLimit } = useMessageLimit();
 
   // State Management
   const [messages, setMessages] = useState<Message[]>([]);
@@ -219,6 +221,9 @@ export const useChat = (chatId: string) => {
         setMessages(newMessages);
         setInput("");
 
+        // Manually refetch the message limit after sending a message
+        refetchMessageLimit();
+
         // Continue with sending the message to the new chat using streaming
         await streamMessage(newMessages, {
           modelId: selectedModel,
@@ -282,6 +287,9 @@ export const useChat = (chatId: string) => {
     const newMessages: Message[] = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
+
+    // Manually refetch the message limit after sending a message
+    refetchMessageLimit();
 
     // Use streaming for better user experience
     await streamMessage(newMessages, {
