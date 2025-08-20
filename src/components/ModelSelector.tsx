@@ -212,6 +212,11 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
                   >
                     {getModelDisplayName(model)}
                   </span>
+                  {model.cost > 1 && (
+                    <span className="text-[10px] bg-yellow-500/20 text-yellow-400 font-semibold px-1.5 py-0.5 rounded-md border border-yellow-500/30">
+                      {model.cost}x Msgs
+                    </span>
+                  )}
                 </div>
 
                 {/* Support Tags */}

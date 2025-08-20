@@ -17,6 +17,7 @@ export interface ModelDetail {
   supportsFiles: boolean;
   supportsSearch: boolean;
   supportsFast: boolean;
+  cost: number;
 }
 
 export const MODEL_DETAILS: ModelDetail[] = [
@@ -31,6 +32,7 @@ export const MODEL_DETAILS: ModelDetail[] = [
     supportsFiles: true,
     supportsSearch: true,
     supportsFast: false,
+    cost: 2,
   },
   {
     id: "gemini-2.5-flash",
@@ -42,6 +44,7 @@ export const MODEL_DETAILS: ModelDetail[] = [
     supportsFiles: true,
     supportsSearch: true,
     supportsFast: false,
+    cost: 1,
   },
   {
     id: "gemini-2.5-flash-lite-preview-06-17",
@@ -53,6 +56,7 @@ export const MODEL_DETAILS: ModelDetail[] = [
     supportsFiles: false,
     supportsSearch: false,
     supportsFast: true,
+    cost: 1,
   },
   // Gemini 2.0 Models
   {
@@ -65,6 +69,7 @@ export const MODEL_DETAILS: ModelDetail[] = [
     supportsFiles: true,
     supportsSearch: false,
     supportsFast: false,
+    cost: 1,
   },
   {
     id: "gemini-2.0-flash-lite",
@@ -76,6 +81,7 @@ export const MODEL_DETAILS: ModelDetail[] = [
     supportsFiles: false,
     supportsSearch: false,
     supportsFast: true,
+    cost: 1,
   },
 ];
 

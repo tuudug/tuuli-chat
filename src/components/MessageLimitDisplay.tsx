@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { MessageCircle, ChevronDown, ChevronUp, Clock } from "lucide-react";
-import { api } from "@/lib/trpc/client";
+import { useMessageLimit } from "@/contexts/MessageLimitContext";
 
 export default function MessageLimitDisplay() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,8 +11,7 @@ export default function MessageLimitDisplay() {
   const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  const { data: messageLimit, isLoading } =
-    api.user.checkMessageLimit.useQuery();
+  const { messageLimit, isLoading } = useMessageLimit();
 
   // Handle client-side mounting
   useEffect(() => {
