@@ -2,6 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, createTRPCRouter } from "@/lib/trpc/server";
 import { TRPCError } from "@trpc/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { MODEL_DETAILS, GeminiModelId } from "@/types/models";
 
 // User tier definitions
 export const USER_TIERS = {
@@ -80,7 +81,10 @@ async function ensureUserProfileExists(userId: string) {
   return existingProfile;
 }
 
-export async function handleMessageLimit(userId: string) {
+export async function handleMessageLimit(
+  userId: string,
+  modelId: GeminiModelId
+) {
   const userProfile = await ensureUserProfileExists(userId);
 
   // Check if we need to reset daily count
@@ -105,8 +109,12 @@ export async function handleMessageLimit(userId: string) {
     });
   }
 
+  // Determine message cost
+  const model = MODEL_DETAILS.find((m) => m.id === modelId);
+  const messageCost = model?.cost || 1;
+
   // Increment the count
-  const newCount = isNewDay ? 1 : currentCount + 1;
+  const newCount = isNewDay ? messageCost : currentCount + messageCost;
   const supabaseAdmin = createSupabaseServiceRoleClient();
   const { error: updateError } = await supabaseAdmin
     .from("user_profiles")
