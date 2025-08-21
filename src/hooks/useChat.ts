@@ -167,16 +167,7 @@ export const useChat = (chatId: string) => {
         const newUrl = `/chat/${newClientChatId}`;
         window.history.replaceState(null, "", newUrl);
 
-        // Dispatch event to immediately update sidebar (fallback for realtime)
-        window.dispatchEvent(
-          new CustomEvent("chat-history-insert", {
-            detail: {
-              id: newClientChatId,
-              title: "New Conversation",
-              created_at: new Date().toISOString(),
-            },
-          })
-        );
+        // Note: Sidebar will be updated when the chat gets its actual title
 
         let attachmentDataForApi: Partial<AttachmentApiData> = {};
         if (attachmentFile) {
@@ -487,9 +478,9 @@ export const useChat = (chatId: string) => {
                             .then((result) => {
                               setChatTitle(result.newTitle);
 
-                              // Also trigger sidebar update
+                              // Trigger sidebar update for new chat with title
                               window.dispatchEvent(
-                                new CustomEvent("chat-history-update", {
+                                new CustomEvent("chat-created-with-title", {
                                   detail: {
                                     id: chatIdForTitleGeneration,
                                     title: result.newTitle,
