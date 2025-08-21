@@ -187,7 +187,12 @@ export const chatRouter = createTRPCRouter({
 
       const isSearchDisabled =
         usageData?.is_disabled || (usageData?.call_count || 0) >= 1450;
-      const useSearch = data?.useSearch && !isSearchDisabled;
+      
+      // Check if user is premium before allowing search
+      const userProfile = await caller.getProfile();
+      const isPremium = userProfile.tier === "premium";
+      
+      const useSearch = data?.useSearch && !isSearchDisabled && isPremium;
 
       const lastUserMessage = messages[messages.length - 1];
       const userMessageContent = lastUserMessage.content || "";

@@ -7,8 +7,11 @@ import {
   ChevronUpIcon,
   SearchIcon,
   AlertTriangleIcon,
+  Crown,
 } from "lucide-react";
 import { useSearchStatus } from "@/hooks/useChat";
+import { useMessageLimit } from "@/contexts/MessageLimitContext";
+import UpgradeModal from "./dialogs/UpgradeModal";
 
 interface ToolsSelectorProps {
   useSearch: boolean;
@@ -24,14 +27,21 @@ const ToolsSelector: React.FC<ToolsSelectorProps> = ({
   disabled = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const { searchEnabled, loading } = useSearchStatus();
+  const { messageLimit } = useMessageLimit();
 
-  const canUseSearch = supportsSearch && searchEnabled;
+  const isPremium = messageLimit?.tier === "premium";
+  const canUseSearch = supportsSearch && searchEnabled && isPremium;
+  const canClickSearch = supportsSearch && searchEnabled; // Allow clicking even for non-premium
   const activeToolsCount = canUseSearch && useSearch ? 1 : 0;
 
   const handleSearchToggle = () => {
     if (canUseSearch) {
       setUseSearch(!useSearch);
+    } else if (canClickSearch && !isPremium) {
+      // Trigger upgrade modal for non-premium users
+      setIsUpgradeModalOpen(true);
     }
   };
 
@@ -101,11 +111,11 @@ const ToolsSelector: React.FC<ToolsSelectorProps> = ({
                     {/* Search Tool */}
                     <button
                       onClick={handleSearchToggle}
-                      disabled={!canUseSearch}
+                      disabled={!canClickSearch}
                       className={`w-full text-left border rounded-lg p-3 transition-all duration-200 ${
                         canUseSearch && useSearch
                           ? "bg-blue-600/20 border-blue-500/50 text-white"
-                          : canUseSearch
+                          : canClickSearch
                           ? "bg-gray-800/50 border-gray-700/50 text-gray-300 hover:bg-gray-700/50 hover:border-gray-600/50"
                           : "bg-gray-800/30 border-gray-700/30 text-gray-500 cursor-not-allowed opacity-60"
                       }`}
@@ -148,6 +158,16 @@ const ToolsSelector: React.FC<ToolsSelectorProps> = ({
                           </span>
                         </div>
                       )}
+
+                      {!loading &&
+                        supportsSearch &&
+                        searchEnabled &&
+                        !isPremium && (
+                          <div className="flex items-center gap-2 text-xs text-amber-400">
+                            <Crown size={12} />
+                            <span>Premium feature</span>
+                          </div>
+                        )}
                     </button>
                   </div>
                 </div>
@@ -156,6 +176,10 @@ const ToolsSelector: React.FC<ToolsSelectorProps> = ({
           </>
         )}
       </div>
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+      />
     </>
   );
 };

@@ -2,12 +2,20 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { MessageCircle, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import {
+  MessageCircle,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Crown,
+} from "lucide-react";
 import { useMessageLimit } from "@/contexts/MessageLimitContext";
+import UpgradeModal from "./dialogs/UpgradeModal";
 
 export default function MessageLimitDisplay() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -145,9 +153,18 @@ export default function MessageLimitDisplay() {
                   </div>
 
                   {messageLimit.tier === "basic" && (
-                    <div className="mt-2 text-xs text-yellow-300 bg-yellow-400/10 p-2 rounded">
-                      <strong>Upgrade to Premium</strong> for 500 daily messages
-                      (10x more!)
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsUpgradeModalOpen(true);
+                          setIsOpen(false);
+                        }}
+                        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-2 px-2 rounded-lg transition-all duration-200 transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 text-xs"
+                      >
+                        <Crown className="h-3 w-3" />
+                        <span>Upgrade to Premium</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -206,6 +223,12 @@ export default function MessageLimitDisplay() {
 
         {/* Render popover using portal */}
         {renderPopover()}
+
+        {/* Upgrade Modal */}
+        <UpgradeModal
+          isOpen={isUpgradeModalOpen}
+          onClose={() => setIsUpgradeModalOpen(false)}
+        />
       </div>
     </>
   );

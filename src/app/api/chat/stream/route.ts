@@ -204,9 +204,19 @@ export async function POST(req: NextRequest) {
           console.error("Error fetching search usage:", usageError);
         }
 
+        // Check user's premium status
+        const { data: userProfile } = await supabaseServiceAdmin
+          .from("user_profiles")
+          .select("tier")
+          .eq("id", userId)
+          .single();
+
+        const isPremium = userProfile?.tier === "premium";
+
         const isSearchDisabled =
           usageData?.is_disabled || (usageData?.call_count || 0) >= 1450;
-        const useSearch = requestData?.useSearch && !isSearchDisabled;
+        const useSearch =
+          requestData?.useSearch && !isSearchDisabled && isPremium;
         // --- END OF SEARCH LOGIC ---
 
         // Prepare system prompt and call LLM
