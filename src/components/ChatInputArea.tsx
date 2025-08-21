@@ -14,6 +14,7 @@ import { Message } from "@/types/messages";
 import ModelSelector from "./ModelSelector";
 import AdvancedChatSettings from "./AdvancedChatSettings";
 import ToolsSelector from "./ToolsSelector";
+import { useMessageLimit } from "@/contexts/MessageLimitContext";
 
 // Custom hook to get the previous value of a prop or state
 function usePrevious(value: boolean) {
@@ -64,11 +65,19 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const wasWaitingForResponse = usePrevious(isWaitingForResponse);
+  const { messageLimit } = useMessageLimit();
 
   // Check if the last message exceeds token limit
   const lastMessage = messages[messages.length - 1];
   const shouldShowTokenWarning =
     lastMessage?.total_tokens && lastMessage.total_tokens > 100000;
+
+  // Check if user has enough messages left
+  // Gemini 2.5 Pro uses 2x message count, so disable at 1 remaining message
+  const currentModelDetail = MODEL_DETAILS.find(model => model.id === selectedModel);
+  const requiredMessages = currentModelDetail?.cost || 1;
+  const hasEnoughMessages = messageLimit ? messageLimit.remainingMessages >= requiredMessages : true;
+  const isInputDisabled = isWaitingForResponse || !hasEnoughMessages;
 
   useEffect(() => {
     if (wasWaitingForResponse && !isWaitingForResponse) {
@@ -250,7 +259,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               <ModelSelector
                 selectedModel={selectedModel}
                 setSelectedModel={setSelectedModel}
-                disabled={isWaitingForResponse}
+                disabled={isInputDisabled}
                 favoriteModel={favoriteModel}
                 onSetFavoriteModel={onSetFavoriteModel}
               />
@@ -260,12 +269,12 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 useSearch={useSearch}
                 setUseSearch={setUseSearch}
                 supportsSearch={supportsSearch}
-                disabled={isWaitingForResponse}
+                disabled={isInputDisabled}
               />
               <AdvancedChatSettings
                 settings={chatSettings}
                 onSettingsChange={setChatSettings}
-                disabled={isWaitingForResponse}
+                disabled={isInputDisabled}
               />
             </div>
           </motion.div>
@@ -275,7 +284,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             <button
               type="button"
               onClick={triggerFileInput}
-              disabled={isWaitingForResponse || !supportsFiles}
+              disabled={isInputDisabled || !supportsFiles}
               className={`flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:cursor-not-allowed transition-colors ${
                 supportsFiles
                   ? "text-gray-400 hover:text-gray-200 disabled:opacity-50"
@@ -296,7 +305,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onChange={handleFileChange}
               className="hidden"
               // Consider adding 'accept' attribute e.g., accept="image/*,.pdf,.doc,.docx"
-              disabled={isWaitingForResponse || !supportsFiles}
+              disabled={isInputDisabled || !supportsFiles}
             />
             {/* Text Input */}
             <TextareaAutosize
@@ -312,7 +321,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               minRows={1} // Start with 1 row
               maxRows={6} // Grow up to 6 rows
               rows={1} // Keep initial rows=1
-              disabled={isWaitingForResponse}
+              disabled={isInputDisabled}
               onKeyDown={handleKeyDown}
             />
 
@@ -320,7 +329,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             <motion.button
               type="submit"
               disabled={
-                isWaitingForResponse || (!input.trim() && !selectedFile)
+                isInputDisabled || (!input.trim() && !selectedFile)
               } // Enable if input OR file is present
               className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Send message"
@@ -383,6 +392,35 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 <div className="flex-1">
                   <p className="text-[10px] leading-tight">
                     Start a new chat for better results.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Message Limit Warning - Bottom Left */}
+        <AnimatePresence>
+          {!hasEnoughMessages && messageLimit && (
+            <motion.div
+              className="absolute -top-10 left-1 p-2 bg-red-900/10 border border-red-600/30 rounded text-red-300/80 text-xs max-w-64"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="flex items-center gap-1">
+                <div className="flex-shrink-0 w-3 h-3 rounded-full bg-red-600/50 flex items-center justify-center">
+                  <span className="text-red-200 text-[8px] font-bold">
+                    !
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] leading-tight">
+                    {requiredMessages > 1 
+                      ? `Need ${requiredMessages} messages for this model. ${messageLimit.remainingMessages} left.`
+                      : "No messages remaining today."
+                    }
                   </p>
                 </div>
               </div>

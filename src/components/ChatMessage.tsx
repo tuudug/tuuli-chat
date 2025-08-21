@@ -26,9 +26,6 @@ export default function ChatMessage({
 }: ChatMessageProps) {
   const isUser = message.role === "user";
 
-  const isProModel =
-    message.role === "assistant" && message.model_used === "gemini-2.5-pro";
-
   const isErrorMessage = !!(
     message.role === "assistant" &&
     message.usage_metadata &&
@@ -85,11 +82,6 @@ export default function ChatMessage({
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "";
-
-  // Gradient border style for Pro model
-  const proBorderStyle = isProModel
-    ? "p-0.5 bg-gradient-to-r from-purple-400 to-pink-600 rounded-lg"
     : "";
 
   // Custom components for markdown rendering
@@ -178,8 +170,6 @@ export default function ChatMessage({
   // Use the full content for non-animating messages, animated content for animating ones
   const contentToRender = message.content;
 
-
-
   return (
     <>
       <style jsx>{`
@@ -230,9 +220,11 @@ export default function ChatMessage({
         } px-2 sm:px-0`}
       >
         {!isUser && (
-          <div className={`hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0 transition-opacity ${
-            isStreaming ? "opacity-0" : "opacity-100"
-          }`}>
+          <div
+            className={`hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0 transition-opacity ${
+              isStreaming ? "opacity-0" : "opacity-100"
+            }`}
+          >
             <BotIcon size={16} className="text-text-secondary" />
           </div>
         )}
@@ -241,11 +233,13 @@ export default function ChatMessage({
             isUser ? "items-end" : "items-start"
           }`}
         >
-          <div className={`${proBorderStyle} relative group/message`}>
+          <div className="relative group/message">
             <button
               onClick={() => copyToClipboard(message.content)}
               className={`absolute -top-2 -right-2 transition-opacity p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow-lg z-10 ${
-                isStreaming ? "opacity-0" : "opacity-0 group-hover/message:opacity-100"
+                isStreaming
+                  ? "opacity-0"
+                  : "opacity-0 group-hover/message:opacity-100"
               }`}
               title="Copy message"
             >
@@ -267,7 +261,7 @@ export default function ChatMessage({
                   : isStreaming
                   ? "text-text-primary rounded"
                   : "bg-bg-input text-text-primary rounded"
-              } ${isProModel ? "rounded-[7px]" : ""}`}
+              }`}
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -304,10 +298,10 @@ export default function ChatMessage({
           </div>
           <div
             className={`flex items-center gap-2 text-xs mt-1 text-text-secondary transition-opacity ${
-              isUser 
-                ? "group-hover:opacity-100 opacity-0" 
-                : isStreaming 
-                ? "opacity-0" 
+              isUser
+                ? "group-hover:opacity-100 opacity-0"
+                : isStreaming
+                ? "opacity-0"
                 : "opacity-100"
             }`}
           >

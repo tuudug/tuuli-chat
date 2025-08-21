@@ -5,7 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { GeminiModelId, ChatSettings } from "@/types";
 import { randomUUID } from "crypto";
-import { handleMessageLimit } from "@/lib/trpc/routers/user";
+import { handleMessageLimit, refundMessageCost } from "@/lib/trpc/routers/user";
+import { TRPCError } from "@trpc/server";
 
 // Helper function to upload attachment to Supabase storage
 async function uploadAttachmentToStorage(
@@ -338,6 +339,36 @@ export async function POST(req: NextRequest) {
           // --- END of usage metadata and grounding processing ---
         }
 
+        // Check for empty response (API overload/failure)
+        if (!assistantResponseText || assistantResponseText.trim() === "") {
+          console.error(
+            "❌ Empty response detected from Gemini API - likely overloaded"
+          );
+
+          // Refund the user's message cost
+          await refundMessageCost(userId, modelId);
+
+          // Send error message instead of empty content
+          const errorMessage =
+            "I apologize, but the AI service is currently overloaded and couldn't generate a response. Your message credit has been refunded. Please try again in a moment.";
+
+          await sendEvent("messageComplete", {
+            id: assistantMessageId,
+            role: "assistant",
+            content: errorMessage,
+            created_at: new Date().toISOString(),
+            model_used: modelId,
+            search_references: [],
+            prompt_tokens: null,
+            completion_tokens: null,
+            total_tokens: null,
+            usage_metadata: { error: "API_OVERLOADED" },
+          });
+
+          await sendEvent("done", {});
+          return;
+        }
+
         // Prepare token usage data from finalUsageMetadata
         const promptTokens = finalUsageMetadata?.promptTokenCount || null;
         const completionTokens =
@@ -430,6 +461,15 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("API error:", error);
+    
+    // Handle TRPCError specifically to return the actual error message
+    if (error instanceof TRPCError) {
+      const statusCode = error.code === 'FORBIDDEN' ? 403 : 
+                        error.code === 'UNAUTHORIZED' ? 401 : 
+                        error.code === 'BAD_REQUEST' ? 400 : 500;
+      return new NextResponse(error.message, { status: statusCode });
+    }
+    
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

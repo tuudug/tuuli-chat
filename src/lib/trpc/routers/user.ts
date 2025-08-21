@@ -125,6 +125,49 @@ export async function handleMessageLimit(
   return { success: true, newCount, limit };
 }
 
+// Function to refund message cost when API fails
+export async function refundMessageCost(
+  userId: string,
+  modelId: GeminiModelId
+) {
+  const supabaseAdmin = createSupabaseServiceRoleClient();
+  
+  // Get current user profile
+  const { data: userProfile, error: profileError } = await supabaseAdmin
+    .from("user_profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (profileError || !userProfile) {
+    console.error("❌ Failed to get user profile for refund:", profileError);
+    return { success: false, error: "Failed to get user profile" };
+  }
+
+  // Determine message cost to refund
+  const model = MODEL_DETAILS.find((m) => m.id === modelId);
+  const messageCost = model?.cost || 1;
+
+  // Calculate new count (ensure it doesn't go below 0)
+  const newCount = Math.max(0, userProfile.daily_message_count - messageCost);
+
+  // Update the count
+  const { error: updateError } = await supabaseAdmin
+    .from("user_profiles")
+    .update({
+      daily_message_count: newCount,
+    })
+    .eq("id", userId);
+
+  if (updateError) {
+    console.error("❌ Failed to refund message cost:", updateError);
+    return { success: false, error: "Failed to refund message cost" };
+  }
+
+  console.log(`✅ Refunded ${messageCost} message(s) for user ${userId}`);
+  return { success: true, refundedCount: messageCost, newCount };
+}
+
 export const userRouter = createTRPCRouter({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const { user, userId } = ctx;

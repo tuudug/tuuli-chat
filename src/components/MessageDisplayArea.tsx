@@ -42,6 +42,7 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
   const prevFirstTimestampRef = useRef<string | null>(null);
   const prevLastTimestampRef = useRef<string | null>(null);
+  const isLoadingMoreRef = useRef<boolean>(false);
 
   useEffect(() => {
     const viewport = scrollAreaViewportRef.current;
@@ -67,10 +68,10 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
     prevLastTimestampRef.current = currentLast;
   }, [messages]);
 
-  // Auto-scroll when messages update (including streaming)
+  // Auto-scroll when messages update (including streaming) - but not when loading more
   useEffect(() => {
     const viewport = scrollAreaViewportRef.current;
-    if (viewport && messages.length > 0) {
+    if (viewport && messages.length > 0 && !isLoadingMoreRef.current) {
       setTimeout(() => {
         viewport.scrollTo({
           top: viewport.scrollHeight,
@@ -84,12 +85,30 @@ const MessageDisplayArea: React.FC<MessageDisplayAreaProps> = ({
     if (!onLoadMore || !scrollAreaViewportRef.current || isLoadingMore) return;
 
     const viewport = scrollAreaViewportRef.current;
+    const prevScrollTop = viewport.scrollTop;
     const prevHeight = viewport.scrollHeight;
+    
+    // Set flag to prevent auto-scroll during load more
+    isLoadingMoreRef.current = true;
 
-    await onLoadMore();
-
-    const newHeight = viewport.scrollHeight;
-    viewport.scrollTop += newHeight - prevHeight;
+    try {
+      await onLoadMore();
+      
+      // Wait for DOM to update
+      setTimeout(() => {
+        const newHeight = viewport.scrollHeight;
+        const heightDifference = newHeight - prevHeight;
+        
+        // Maintain scroll position by adjusting for new content height
+        viewport.scrollTop = prevScrollTop + heightDifference;
+        
+        // Reset flag after scroll adjustment
+        isLoadingMoreRef.current = false;
+      }, 0);
+    } catch (error) {
+      isLoadingMoreRef.current = false;
+      throw error;
+    }
   };
 
   const showInitialLoading = initialFetchLoading && chatId !== "new";
