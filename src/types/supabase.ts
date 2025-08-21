@@ -73,12 +73,15 @@ export type Database = {
           attachment_type: string | null
           attachment_url: string | null
           chat_id: string
+          completion_tokens: number | null
           content: string
           created_at: string
           id: string
           model_used: string | null
+          prompt_tokens: number | null
           role: string
           search_references: Json | null
+          total_tokens: number | null
           usage_metadata: Json | null
           user_id: string
         }
@@ -87,12 +90,15 @@ export type Database = {
           attachment_type?: string | null
           attachment_url?: string | null
           chat_id: string
+          completion_tokens?: number | null
           content: string
           created_at?: string
           id?: string
           model_used?: string | null
+          prompt_tokens?: number | null
           role: string
           search_references?: Json | null
+          total_tokens?: number | null
           usage_metadata?: Json | null
           user_id: string
         }
@@ -101,12 +107,15 @@ export type Database = {
           attachment_type?: string | null
           attachment_url?: string | null
           chat_id?: string
+          completion_tokens?: number | null
           content?: string
           created_at?: string
           id?: string
           model_used?: string | null
+          prompt_tokens?: number | null
           role?: string
           search_references?: Json | null
+          total_tokens?: number | null
           usage_metadata?: Json | null
           user_id?: string
         }

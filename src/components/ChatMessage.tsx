@@ -72,7 +72,7 @@ export default function ChatMessage({
     isUser && imageType?.startsWith("image/") && displayableImageSrc;
 
   // Get model identifier
-  const modelIdentifier = message.model_used || message.data?.ui_model_used;
+  const modelIdentifier = message.model_used;
 
   const modelName =
     message.role === "assistant" && modelIdentifier
@@ -80,9 +80,8 @@ export default function ChatMessage({
       : null;
 
   // Get timestamp
-  const createdAtSource = message.created_at || message.data?.ui_created_at;
-  const timestamp = createdAtSource
-    ? new Date(createdAtSource).toLocaleTimeString([], {
+  const timestamp = message.created_at
+    ? new Date(message.created_at).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       })

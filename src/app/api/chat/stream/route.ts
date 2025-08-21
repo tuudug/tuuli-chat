@@ -7,6 +7,55 @@ import { GeminiModelId, ChatSettings } from "@/types";
 import { randomUUID } from "crypto";
 import { handleMessageLimit } from "@/lib/trpc/routers/user";
 
+// Helper function to upload attachment to Supabase storage
+async function uploadAttachmentToStorage(
+  supabaseServiceAdmin: ReturnType<typeof createSupabaseServiceRoleClient>,
+  userId: string,
+  chatId: string,
+  attachmentContent: string,
+  attachmentName: string,
+  attachmentType: string
+): Promise<{ url: string; name: string; type: string } | null> {
+  try {
+    // Convert base64 to buffer
+    const base64Data = attachmentContent.split(",")[1];
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Generate unique filename
+    const fileExtension = attachmentName.split(".").pop() || "bin";
+    const uniqueFileName = `${userId}/${chatId}/${randomUUID()}.${fileExtension}`;
+
+    // Upload to Supabase storage
+    const { data: _data, error } = await supabaseServiceAdmin.storage
+      .from("user-attachments")
+      .upload(uniqueFileName, buffer, {
+        contentType: attachmentType,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("Error uploading attachment:", error);
+      return null;
+    }
+
+    // Get public URL
+    const {
+      data: { publicUrl },
+    } = supabaseServiceAdmin.storage
+      .from("user-attachments")
+      .getPublicUrl(uniqueFileName);
+
+    return {
+      url: publicUrl,
+      name: attachmentName,
+      type: attachmentType,
+    };
+  } catch (error) {
+    console.error("Error in uploadAttachmentToStorage:", error);
+    return null;
+  }
+}
+
 const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
 });
@@ -108,15 +157,35 @@ export async function POST(req: NextRequest) {
         const lastUserMessage = messages[messages.length - 1];
         const userMessageContent = lastUserMessage.content || "";
 
+        // Handle attachment upload if present
+        let attachmentData = null;
+        if (
+          requestData?.attachment_content &&
+          requestData?.attachment_name &&
+          requestData?.attachment_type
+        ) {
+          attachmentData = await uploadAttachmentToStorage(
+            supabaseServiceAdmin,
+            userId,
+            chatId,
+            requestData.attachment_content,
+            requestData.attachment_name,
+            requestData.attachment_type
+          );
+        }
+
         await supabase.from("messages").insert({
           chat_id: chatId,
           user_id: userId,
           role: "user",
           content: userMessageContent,
           model_used: modelId,
-          attachment_url: requestData?.attachment_url,
-          attachment_name: requestData?.attachment_name,
-          attachment_type: requestData?.attachment_type,
+          attachment_url:
+            attachmentData?.url || requestData?.attachment_url || null,
+          attachment_name:
+            attachmentData?.name || requestData?.attachment_name || null,
+          attachment_type:
+            attachmentData?.type || requestData?.attachment_type || null,
         });
 
         // --- START OF SEARCH LOGIC ---
@@ -197,6 +266,12 @@ export async function POST(req: NextRequest) {
         let assistantResponseText = "";
         const assistantMessageId = randomUUID();
         let searchReferences: { url: string; title: string }[] = [];
+        let finalUsageMetadata: {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          totalTokenCount?: number;
+          cachedContentTokenCount?: number;
+        } | null = null;
 
         await sendEvent("messageStart", {
           id: assistantMessageId,
@@ -225,7 +300,12 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // --- START of grounding metadata processing ---
+          // --- START of usage metadata and grounding processing ---
+          // Capture usage metadata from each chunk (final chunk will have complete data)
+          if (chunk.usageMetadata) {
+            finalUsageMetadata = chunk.usageMetadata;
+          }
+
           if (chunk.candidates?.[0]?.finishReason === "STOP") {
             const groundingChunks =
               chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -245,8 +325,20 @@ export async function POST(req: NextRequest) {
                 );
             }
           }
-          // --- END of grounding metadata processing ---
+          // --- END of usage metadata and grounding processing ---
         }
+
+        // Prepare token usage data from finalUsageMetadata
+        const promptTokens = finalUsageMetadata?.promptTokenCount || null;
+        const completionTokens =
+          finalUsageMetadata?.candidatesTokenCount || null;
+        const totalTokens = finalUsageMetadata?.totalTokenCount || null;
+
+        // Combine cached and non-cached tokens as requested
+        const adjustedPromptTokens =
+          promptTokens && finalUsageMetadata?.cachedContentTokenCount
+            ? promptTokens + finalUsageMetadata.cachedContentTokenCount
+            : promptTokens;
 
         // Save the complete assistant message
         const { data: assistantMessageShell, error: shellError } =
@@ -259,6 +351,10 @@ export async function POST(req: NextRequest) {
               content: assistantResponseText,
               model_used: modelId,
               search_references: searchReferences, // Save references
+              prompt_tokens: adjustedPromptTokens,
+              completion_tokens: completionTokens,
+              total_tokens: totalTokens,
+              usage_metadata: finalUsageMetadata, // Store the full metadata as JSON
             })
             .select("id")
             .single();
@@ -297,6 +393,10 @@ export async function POST(req: NextRequest) {
           created_at: new Date().toISOString(),
           model_used: modelId,
           search_references: searchReferences, // Send references to client
+          prompt_tokens: adjustedPromptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: totalTokens,
+          usage_metadata: finalUsageMetadata,
         });
 
         await sendEvent("done", {});

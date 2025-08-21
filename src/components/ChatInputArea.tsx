@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
 import { ChatSettings } from "@/types/settings";
+import { Message } from "@/types/messages";
 import ModelSelector from "./ModelSelector";
 import AdvancedChatSettings from "./AdvancedChatSettings";
 import ToolsSelector from "./ToolsSelector";
@@ -40,6 +41,7 @@ interface ChatInputAreaProps {
   onSetFavoriteModel: (modelId: GeminiModelId) => void;
   chatSettings: ChatSettings;
   setChatSettings: (settings: ChatSettings) => void;
+  messages: Message[]; // Add messages prop for token warning
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -53,6 +55,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSetFavoriteModel,
   chatSettings,
   setChatSettings,
+  messages,
 }) => {
   const [useSearch, setUseSearch] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -61,6 +64,11 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const wasWaitingForResponse = usePrevious(isWaitingForResponse);
+
+  // Check if the last message exceeds token limit
+  const lastMessage = messages[messages.length - 1];
+  const shouldShowTokenWarning =
+    lastMessage?.total_tokens && lastMessage.total_tokens > 100000;
 
   useEffect(() => {
     if (wasWaitingForResponse && !isWaitingForResponse) {
@@ -355,6 +363,32 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             )}
           </AnimatePresence>
         </form>
+
+        {/* Token Usage Warning - Bottom Right */}
+        <AnimatePresence>
+          {shouldShowTokenWarning && (
+            <motion.div
+              className="absolute -top-10 right-1 p-2 bg-yellow-900/10 border border-yellow-600/30 rounded text-yellow-300/80 text-xs max-w-64"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="flex items-center gap-1">
+                <div className="flex-shrink-0 w-3 h-3 rounded-full bg-yellow-600/50 flex items-center justify-center">
+                  <span className="text-yellow-200 text-[8px] font-bold">
+                    !
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] leading-tight">
+                    Start a new chat for better results.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

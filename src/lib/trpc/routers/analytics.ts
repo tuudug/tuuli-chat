@@ -77,7 +77,7 @@ export const analyticsRouter = createTRPCRouter({
       const { data: messages, error: messagesError } = await serviceSupabase
         .from("messages")
         .select(
-          "model_used, prompt_tokens, completion_tokens, user_id, created_at, sparks_cost"
+          "model_used, prompt_tokens, completion_tokens, user_id, created_at"
         )
         .eq("role", "assistant")
         .gte("created_at", startDate.toISOString())
@@ -113,7 +113,6 @@ export const analyticsRouter = createTRPCRouter({
       let totalPromptTokens = 0;
       let totalCompletionTokens = 0;
       let totalCost = 0;
-      let totalSparksCost = 0;
       const modelUsage: Record<string, number> = {};
       const priceByModel: Record<string, number> = {};
       const priceByUser: Record<string, number> = {};
@@ -136,7 +135,6 @@ export const analyticsRouter = createTRPCRouter({
           modelUsage: Record<string, number>;
           firstMessage: Date;
           lastMessage: Date;
-          sparksCost: number;
         }
       > = {};
 
@@ -148,7 +146,7 @@ export const analyticsRouter = createTRPCRouter({
         if (message.prompt_tokens) totalPromptTokens += message.prompt_tokens;
         if (message.completion_tokens)
           totalCompletionTokens += message.completion_tokens;
-        if (message.sparks_cost) totalSparksCost += message.sparks_cost;
+        // Note: sparks_cost field removed from database schema
 
         const modelId = message.model_used as GeminiModelId | null;
         if (modelId && MODEL_PRICES[modelId]) {
@@ -177,7 +175,6 @@ export const analyticsRouter = createTRPCRouter({
                 modelUsage: {},
                 firstMessage: messageDate,
                 lastMessage: messageDate,
-                sparksCost: 0,
               };
             }
 
@@ -187,7 +184,7 @@ export const analyticsRouter = createTRPCRouter({
             userStats.totalTokens += totalMessageTokens;
             userStats.modelUsage[modelId] =
               (userStats.modelUsage[modelId] || 0) + 1;
-            userStats.sparksCost += message.sparks_cost || 0;
+            // Note: sparks_cost field removed from database schema
 
             if (messageDate < userStats.firstMessage) {
               userStats.firstMessage = messageDate;
@@ -344,7 +341,6 @@ export const analyticsRouter = createTRPCRouter({
             avgMessagesPerDay: parseFloat(
               (stats.messageCount / daysSinceFirst).toFixed(2)
             ),
-            sparksCost: stats.sparksCost,
             firstMessageDate: stats.firstMessage.toISOString().split("T")[0],
             lastMessageDate: stats.lastMessage.toISOString().split("T")[0],
           };
@@ -361,7 +357,6 @@ export const analyticsRouter = createTRPCRouter({
         startDate: startDate.toISOString(),
         fetchedMessagesCount: messages.length,
         totalCost: parseFloat(totalCost.toFixed(6)),
-        totalSparksCost,
         activeUsersCount,
         avgCostPerMessage:
           messages.length > 0

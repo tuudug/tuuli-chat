@@ -101,6 +101,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
         chatSettings={chatSettings}
         setChatSettings={setChatSettings}
         isWaitingForResponse={isLoading}
+        messages={messages as unknown as Message[]}
       />
     </div>
   );

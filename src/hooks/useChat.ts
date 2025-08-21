@@ -205,7 +205,6 @@ export const useChat = (chatId: string) => {
           role: "user",
           content: currentInput,
           created_at: new Date().toISOString(),
-          timestamp: new Date(),
           ...(attachmentFile && {
             attachment_name: attachmentFile.name,
             attachment_type: attachmentFile.type,
@@ -244,7 +243,6 @@ export const useChat = (chatId: string) => {
       role: "user",
       content: currentInput,
       created_at: new Date().toISOString(),
-      timestamp: new Date(),
     };
 
     if (attachmentFile) {
@@ -409,7 +407,6 @@ export const useChat = (chatId: string) => {
                     role: "assistant",
                     content: "",
                     created_at: parsedData.created_at,
-                    timestamp: new Date(parsedData.created_at),
                     model_used: parsedData.model_used,
                   };
                   // Add streaming message directly to messages array to avoid double animation
@@ -445,6 +442,10 @@ export const useChat = (chatId: string) => {
                       ...streamingMessageRef,
                       content: parsedData.content,
                       search_references: parsedData.search_references,
+                      prompt_tokens: parsedData.prompt_tokens,
+                      completion_tokens: parsedData.completion_tokens,
+                      total_tokens: parsedData.total_tokens,
+                      usage_metadata: parsedData.usage_metadata,
                       isNew: true,
                     };
 
