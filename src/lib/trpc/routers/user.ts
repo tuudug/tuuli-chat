@@ -20,7 +20,6 @@ export const MESSAGE_LIMITS = {
 
 // Utility function to ensure user profile exists
 async function ensureUserProfileExists(userId: string) {
-  console.log("🔍 Checking user profile for:", userId);
   const supabaseAdmin = createSupabaseServiceRoleClient();
 
   const { data: existingProfile, error } = await supabaseAdmin
@@ -28,12 +27,6 @@ async function ensureUserProfileExists(userId: string) {
     .select("*")
     .eq("id", userId)
     .single();
-
-  console.log("📊 Profile check result:", {
-    hasProfile: !!existingProfile,
-    errorCode: error?.code,
-    errorMessage: error?.message,
-  });
 
   if (error && error.code !== "PGRST116") {
     console.error("❌ Failed to check user profile:", error);
@@ -45,7 +38,6 @@ async function ensureUserProfileExists(userId: string) {
 
   // If user doesn't exist, create a new profile
   if (!existingProfile) {
-    console.log("👤 Creating new user profile for:", userId);
     const newProfile = {
       id: userId,
       tier: USER_TIERS.BASIC,
@@ -53,7 +45,6 @@ async function ensureUserProfileExists(userId: string) {
       last_message_reset_at: new Date().toISOString(),
     };
 
-    console.log("📝 New profile data:", newProfile);
     const { data: createdProfile, error: createError } = await supabaseAdmin
       .from("user_profiles")
       .insert(newProfile)
@@ -73,11 +64,9 @@ async function ensureUserProfileExists(userId: string) {
       });
     }
 
-    console.log("✅ User profile created:", createdProfile);
     return createdProfile;
   }
 
-  console.log("✅ Using existing user profile:", existingProfile);
   return existingProfile;
 }
 

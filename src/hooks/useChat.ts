@@ -113,8 +113,6 @@ export const useChat = (chatId: string) => {
   // Listen for reset-to-new-chat event from sidebar
   useEffect(() => {
     const handleResetToNewChat = () => {
-      console.log("🔄 Received reset-to-new-chat event, resetting state...");
-
       // Reset all relevant state
       setMessages([]);
       setChatTitle("New Conversation");
@@ -124,8 +122,6 @@ export const useChat = (chatId: string) => {
       setIsStreaming(false);
       setPendingChatId(null);
       setEffectiveChatId("new");
-
-      console.log("✅ Chat state reset to clean new chat state");
     };
 
     window.addEventListener("reset-to-new-chat", handleResetToNewChat);
@@ -488,7 +484,6 @@ export const useChat = (chatId: string) => {
                               assistantResponse,
                             })
                             .then((result) => {
-                              console.log("Title generated:", result.newTitle);
                               setChatTitle(result.newTitle);
 
                               // Also trigger sidebar update

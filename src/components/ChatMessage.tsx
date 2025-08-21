@@ -280,7 +280,7 @@ export default function ChatMessage({
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
               ) : (
-                <div className="prose prose-sm prose-invert max-w-none text-white w-full overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-full">
+                <div className="prose prose-sm prose-invert  text-white w-full overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-full">
                   <ReactMarkdown
                     remarkPlugins={[remarkMath, remarkGfm]}
                     rehypePlugins={[rehypeKatex]}

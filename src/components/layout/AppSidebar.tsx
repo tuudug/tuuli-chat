@@ -19,9 +19,6 @@ const AppSidebarContent = () => {
       activeChatId === "new" && currentUrl !== "/chat/new";
 
     if (isInPseudoState) {
-      console.log(
-        "🔄 Detected pseudo-state, resetting to clean new chat state"
-      );
       e.preventDefault(); // Prevent default Link behavior
 
       // Dispatch event to reset chat state and navigate properly
