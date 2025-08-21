@@ -6,7 +6,6 @@ export type FocusModeSetting = "balanced" | "creative" | "analytical";
 export type ExplanationStyleSetting = "direct" | "step-by-step" | "examples";
 
 export interface ChatSettings {
-  temperature: number;
   responseLength: ResponseLengthSetting;
   tone: ToneSetting;
   focusMode: FocusModeSetting;
@@ -14,7 +13,6 @@ export interface ChatSettings {
 }
 
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
-  temperature: 0.9,
   responseLength: "brief",
   tone: "formal",
   focusMode: "balanced",

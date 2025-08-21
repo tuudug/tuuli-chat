@@ -123,7 +123,6 @@ export const chatRouter = createTRPCRouter({
             chatSettings: z.custom<ChatSettings>().optional(),
             useSearch: z.boolean().optional(),
             responseLength: z.custom<ResponseLengthSetting>().optional(),
-            temperature: z.number().optional(),
           })
           .optional(),
       })
@@ -154,12 +153,14 @@ export const chatRouter = createTRPCRouter({
       const modelId = data?.modelId || "gemini-2.0-flash-lite";
 
       const chatSettings = data?.chatSettings || {
-        temperature: data?.temperature || 0.9,
         responseLength: data?.responseLength || "brief",
         tone: "formal",
         focusMode: "balanced",
         explanationStyle: "direct",
       };
+
+      // Temperature is always hardcoded to 0.9
+      const temperature = 0.9;
 
       const clientProvidedChatId = data?.chatId;
 
@@ -245,7 +246,7 @@ export const chatRouter = createTRPCRouter({
 
         const resultStream = await genAI.models.generateContentStream({
           config: {
-            temperature: chatSettings.temperature,
+            temperature: temperature,
             tools: useSearch ? [groundingTool] : undefined,
           },
           model: modelId,

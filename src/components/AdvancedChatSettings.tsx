@@ -9,7 +9,7 @@ import {
   FocusModeSetting,
   ExplanationStyleSetting,
 } from "@/types/settings";
-import TemperatureSlider from "./TemperatureSlider";
+// TemperatureSlider removed - temperature is now hardcoded to 0.9
 
 interface AdvancedChatSettingsProps {
   settings: ChatSettings;
@@ -74,9 +74,7 @@ const AdvancedChatSettings: React.FC<AdvancedChatSettingsProps> = ({
     </div>
   );
 
-  const updateTemperature = (temp: number) => {
-    updateSetting("temperature", temp);
-  };
+  // Temperature update function removed - temperature is now hardcoded to 0.9
 
   return (
     <>
@@ -137,12 +135,6 @@ const AdvancedChatSettings: React.FC<AdvancedChatSettingsProps> = ({
                   <div className="space-y-4">
                     {/* Response Style Section */}
                     <SettingGroup title="Response Style">
-                      <TemperatureSlider
-                        temperature={settings.temperature}
-                        setTemperature={updateTemperature}
-                        disabled={disabled}
-                      />
-
                       <RadioGroup
                         label="Length"
                         value={settings.responseLength}
