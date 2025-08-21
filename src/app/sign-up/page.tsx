@@ -32,7 +32,54 @@ export default function SignUpPage() {
   }, [isSignedIn, router]);
 
   if (isSignedIn) {
-    return null; // Don't render anything while redirecting
+    return (
+      <div className="min-h-screen bg-gray-900 relative overflow-hidden flex flex-col items-center justify-center p-4">
+        {/* Subtle animated background */}
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            background: `
+              radial-gradient(circle at ${mousePosition.x}% ${
+              mousePosition.y
+            }%, 
+                rgba(59, 130, 246, 0.3) 0%, 
+                transparent 50%),
+              radial-gradient(circle at ${100 - mousePosition.x}% ${
+              100 - mousePosition.y
+            }%, 
+                rgba(147, 51, 234, 0.2) 0%, 
+                transparent 50%)
+            `,
+          }}
+        />
+
+        {/* Subtle grid pattern */}
+        <div
+          className="absolute inset-0 opacity-5"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: "50px 50px",
+          }}
+        />
+
+        {/* Loading content */}
+        <div className="relative z-10 flex flex-col items-center space-y-8">
+          <div className="text-center">
+            <Image
+              src="/logo.png"
+              alt="tuuli Chat Logo"
+              width={160}
+              height={160}
+              className="mx-auto mb-1 drop-shadow-2xl"
+            />
+          </div>
+          <div className="text-gray-400 text-sm">Redirecting...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
