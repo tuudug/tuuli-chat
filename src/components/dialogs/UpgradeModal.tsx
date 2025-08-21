@@ -495,21 +495,14 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                           <div className="space-y-6">
                             {/* Redeem Code Form */}
                             <div className="space-y-4">
-                              <h3 className="text-lg font-semibold text-white mb-4">
-                                Enter Redeem Code
-                              </h3>
-
                               <div className="space-y-3">
-                                <label className="text-sm text-gray-400">
-                                  Promotional Code
-                                </label>
                                 <input
                                   type="text"
                                   value={redeemCode}
                                   onChange={(e) =>
                                     setRedeemCode(e.target.value.toUpperCase())
                                   }
-                                  placeholder="Enter your code here"
+                                  placeholder="T6Y2R8E3W7"
                                   className="w-full bg-gray-800/50 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors"
                                 />
                               </div>
@@ -544,20 +537,6 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                                   "Redeem Code"
                                 )}
                               </button>
-                            </div>
-
-                            {/* Info Box */}
-                            <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Star className="h-5 w-5 text-purple-400" />
-                                <span className="font-semibold text-purple-300">
-                                  Promotional Codes
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-300">
-                                Have a promotional code from our team? Enter it
-                                above to unlock premium features instantly.
-                              </p>
                             </div>
                           </div>
                         )}
