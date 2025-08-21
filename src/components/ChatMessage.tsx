@@ -179,6 +179,8 @@ export default function ChatMessage({
   // Use the full content for non-animating messages, animated content for animating ones
   const contentToRender = message.content;
 
+
+
   return (
     <>
       <style jsx>{`
@@ -229,7 +231,9 @@ export default function ChatMessage({
         } px-2 sm:px-0`}
       >
         {!isUser && (
-          <div className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0">
+          <div className={`hidden sm:flex w-8 h-8 rounded-full items-center justify-center bg-bg-input flex-shrink-0 transition-opacity ${
+            isStreaming ? "opacity-0" : "opacity-100"
+          }`}>
             <BotIcon size={16} className="text-text-secondary" />
           </div>
         )}
@@ -241,7 +245,9 @@ export default function ChatMessage({
           <div className={`${proBorderStyle} relative group/message`}>
             <button
               onClick={() => copyToClipboard(message.content)}
-              className="absolute -top-2 -right-2 opacity-0 group-hover/message:opacity-100 transition-opacity p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow-lg z-10"
+              className={`absolute -top-2 -right-2 transition-opacity p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow-lg z-10 ${
+                isStreaming ? "opacity-0" : "opacity-0 group-hover/message:opacity-100"
+              }`}
               title="Copy message"
             >
               {isCopied ? (
@@ -254,11 +260,13 @@ export default function ChatMessage({
               )}
             </button>
             <motion.div
-              className={`p-3 rounded-lg max-w-[calc(100vw-1rem)] sm:max-w-full ${
+              className={`p-3 rounded-lg max-w-[calc(100vw-1rem)] sm:max-w-full transition-colors ${
                 isUser
                   ? "bg-btn-primary text-text-primary rounded"
                   : isErrorMessage
                   ? "bg-bg-input text-red-400 border border-red-200 rounded"
+                  : isStreaming
+                  ? "text-text-primary rounded"
                   : "bg-bg-input text-text-primary rounded"
               } ${isProModel ? "rounded-[7px]" : ""}`}
               initial={{ scale: 0.95, opacity: 0 }}
@@ -296,9 +304,13 @@ export default function ChatMessage({
             </motion.div>
           </div>
           <div
-            className={`flex items-center gap-2 text-xs mt-1 text-text-secondary ${
-              isUser ? "group-hover:opacity-100 opacity-0" : "opacity-100"
-            } transition-opacity`}
+            className={`flex items-center gap-2 text-xs mt-1 text-text-secondary transition-opacity ${
+              isUser 
+                ? "group-hover:opacity-100 opacity-0" 
+                : isStreaming 
+                ? "opacity-0" 
+                : "opacity-100"
+            }`}
           >
             {modelName && <span className="font-medium">{modelName}</span>}
             {modelName && timestamp && <span>•</span>}
