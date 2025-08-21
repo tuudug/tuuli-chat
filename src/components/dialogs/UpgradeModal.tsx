@@ -252,7 +252,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                       </h2>
                       <p className="text-sm text-gray-300">
                         {currentStep === "features"
-                          ? "Support Tuuli Chat in Alpha"
+                          ? "Support tuuli Chat in Alpha"
                           : currentStep === "payment"
                           ? "Choose your payment method"
                           : "Your upgrade is being processed"}
@@ -274,7 +274,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                           </span>
                         </div>
                         <p className="text-sm text-gray-300">
-                          Since Tuuli Chat is in alpha, your support gives you{" "}
+                          Since tuuli Chat is in alpha, your support gives you{" "}
                           <strong className="text-white">
                             immediate premium access
                           </strong>{" "}
@@ -413,12 +413,15 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                                       IBAN Number
                                     </label>
                                     <p className="text-white font-medium font-mono text-sm">
-                                      2015132510
+                                      MN590015002015132510
                                     </p>
                                   </div>
                                   <button
                                     onClick={() =>
-                                      copyToClipboard("2015132510", "account")
+                                      copyToClipboard(
+                                        "MN590015002015132510",
+                                        "account"
+                                      )
                                     }
                                     className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-md transition-colors"
                                   >
@@ -437,7 +440,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                                   Transfer Amount
                                 </label>
                                 <p className="text-white font-medium text-sm">
-                                  10000₮
+                                  10,000 MNT
                                 </p>
                               </div>
 
@@ -446,14 +449,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                                 <div className="flex items-center justify-between">
                                   <div className="flex-1">
                                     <label className="text-xs text-gray-400">
-                                      Transaction Remark
+                                      Гүйлгээний утга
                                     </label>
                                     <p className="text-white font-medium font-mono text-sm">
                                       {transactionRemark}
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      Please include this remark for faster
-                                      processing
                                     </p>
                                   </div>
                                   <button
@@ -577,7 +576,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                           Payment Submitted!
                         </h3>
                         <p className="text-gray-300 text-sm">
-                          Thank you for supporting Tuuli Chat during our alpha
+                          Thank you for supporting tuuli Chat during our alpha
                           phase.
                         </p>
                       </motion.div>
@@ -599,7 +598,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
                           We&apos;ll verify your payment and upgrade your
                           account{" "}
                           <strong className="text-white">
-                            as soon as possible.
+                            as soon as possible
                           </strong>
                           . You&apos;ll receive a confirmation email once the
                           upgrade is complete.
