@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
-import { GeminiModelId, ChatSettings } from "@/types";
+import { GoogleGenAI, type Content } from "@google/genai";
 import { randomUUID } from "crypto";
 import { handleMessageLimit, refundMessageCost } from "@/lib/trpc/routers/user";
 import { TRPCError } from "@trpc/server";
@@ -61,36 +60,6 @@ const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
 });
 
-const createSystemPrompt = (
-  modelId: GeminiModelId,
-  settings: ChatSettings
-): Content => {
-  const promptContent = `You are a helpful AI assistant. Keep your responses conversational and helpful.`;
-
-  if (settings.responseLength === "detailed") {
-    return {
-      role: "user",
-      parts: [
-        {
-          text:
-            promptContent +
-            " Please provide comprehensive and detailed responses with thorough explanations.",
-        },
-      ],
-    };
-  } else {
-    return {
-      role: "user",
-      parts: [
-        {
-          text:
-            promptContent + " Keep your responses concise and to the point.",
-        },
-      ],
-    };
-  }
-};
-
 export async function POST(req: NextRequest) {
   try {
     const { userId, getToken } = await auth();
@@ -125,13 +94,6 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    const chatSettings = requestData?.chatSettings || {
-      temperature: 0.9,
-      responseLength: "brief",
-      tone: "formal",
-      focusMode: "balanced",
-      explanationStyle: "direct",
-    };
     const chatId = requestData?.chatId;
 
     if (!messages || messages.length === 0 || !chatId) {
@@ -215,16 +177,13 @@ export async function POST(req: NextRequest) {
         const isPremium = userProfile?.tier === "premium";
 
         const isSearchDisabled =
-          usageData?.is_disabled || (usageData?.call_count || 0) >= 1450;
-        const useSearch =
-          requestData?.useSearch && !isSearchDisabled && isPremium;
+          usageData?.is_disabled || (usageData?.call_count || 0) >= 1500;
+
+        // Automatically enable search if within limits and user is premium
+        const useSearch = !isSearchDisabled && isPremium;
         // --- END OF SEARCH LOGIC ---
 
-        // Prepare system prompt and call LLM
-        const systemPromptObject = createSystemPrompt(modelId, chatSettings);
-        const systemPromptText =
-          (systemPromptObject.parts?.[0] as Part)?.text || "";
-
+        // Prepare messages for LLM call without system prompt
         const messagesForLlm: Content[] = messages.map(
           (msg: { role: string; content: string }) => ({
             role: msg.role === "assistant" ? "model" : "user",
@@ -249,14 +208,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const contentsForLlm = [
-          { role: "user" as const, parts: [{ text: systemPromptText }] },
-          {
-            role: "model" as const,
-            parts: [{ text: "Okay, I will follow these instructions." }],
-          },
-          ...messagesForLlm,
-        ];
+        const contentsForLlm = messagesForLlm;
 
         // --- START of LLM Call modification ---
         const groundingTool = {
@@ -265,7 +217,7 @@ export async function POST(req: NextRequest) {
 
         const resultStream = await genAI.models.generateContentStream({
           config: {
-            temperature: chatSettings.temperature,
+            temperature: 0.9, // Hardcoded temperature
             // Only include tools if useSearch is true
             ...(useSearch && { tools: [groundingTool] }),
           },
@@ -415,7 +367,7 @@ export async function POST(req: NextRequest) {
               {
                 date: today,
                 call_count: (usageData?.call_count || 0) + 1,
-                is_disabled: (usageData?.call_count || 0) + 1 >= 1450,
+                is_disabled: (usageData?.call_count || 0) + 1 >= 1500,
               },
               { onConflict: "date" }
             );
@@ -461,15 +413,20 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("API error:", error);
-    
+
     // Handle TRPCError specifically to return the actual error message
     if (error instanceof TRPCError) {
-      const statusCode = error.code === 'FORBIDDEN' ? 403 : 
-                        error.code === 'UNAUTHORIZED' ? 401 : 
-                        error.code === 'BAD_REQUEST' ? 400 : 500;
+      const statusCode =
+        error.code === "FORBIDDEN"
+          ? 403
+          : error.code === "UNAUTHORIZED"
+          ? 401
+          : error.code === "BAD_REQUEST"
+          ? 400
+          : 500;
       return new NextResponse(error.message, { status: statusCode });
     }
-    
+
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

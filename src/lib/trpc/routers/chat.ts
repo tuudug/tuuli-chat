@@ -6,71 +6,14 @@ import {
 } from "@/lib/trpc/server";
 import { TRPCError } from "@trpc/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import {
-  MODEL_DETAILS,
-  ResponseLengthSetting,
-  type GeminiModelId,
-} from "@/types";
-import { ChatSettings } from "@/types/settings";
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { ResponseLengthSetting, type GeminiModelId } from "@/types";
+import { GoogleGenAI, type Content } from "@google/genai";
 import { randomUUID } from "crypto";
 import { userRouter } from "./user";
 
 const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
 });
-
-const createSystemPrompt = (
-  modelId: GeminiModelId,
-  settings: ChatSettings
-): Content => {
-  const modelInfo = MODEL_DETAILS.find((model) => model.id === modelId);
-  const modelName = modelInfo?.name || modelId;
-
-  let promptContent = `You are ${modelName}, a powerful AI language model.`;
-
-  if (settings.responseLength === "detailed") {
-    promptContent +=
-      " Please provide comprehensive and detailed responses with thorough explanations.";
-  } else {
-    promptContent += " Keep your responses concise and to the point.";
-  }
-
-  if (settings.tone === "casual") {
-    promptContent +=
-      " Use a friendly, conversational tone. Feel free to use contractions and informal language.";
-  } else {
-    promptContent +=
-      " Maintain a professional and formal tone in your responses.";
-  }
-
-  if (settings.focusMode === "creative") {
-    promptContent +=
-      " Prioritize creative, innovative, and imaginative approaches in your responses.";
-  } else if (settings.focusMode === "analytical") {
-    promptContent +=
-      " Focus on logical analysis, data-driven insights, and systematic problem-solving.";
-  } else {
-    promptContent +=
-      " Provide balanced responses that combine both analytical and creative thinking.";
-  }
-
-  if (settings.explanationStyle === "step-by-step") {
-    promptContent +=
-      " When explaining concepts, break them down into clear, sequential steps.";
-  } else if (settings.explanationStyle === "examples") {
-    promptContent +=
-      " Use concrete examples and practical illustrations to clarify your explanations.";
-  } else {
-    promptContent +=
-      " Provide direct, straightforward explanations without unnecessary elaboration.";
-  }
-
-  return {
-    role: "system",
-    parts: [{ text: promptContent }],
-  };
-};
 
 const userCaller = createCallerFactory(userRouter);
 
@@ -120,8 +63,6 @@ export const chatRouter = createTRPCRouter({
             attachment_content: z.string().optional(),
             attachment_name: z.string().optional(),
             attachment_type: z.string().optional(),
-            chatSettings: z.custom<ChatSettings>().optional(),
-            useSearch: z.boolean().optional(),
             responseLength: z.custom<ResponseLengthSetting>().optional(),
           })
           .optional(),
@@ -152,13 +93,6 @@ export const chatRouter = createTRPCRouter({
 
       const modelId = data?.modelId || "gemini-2.0-flash-lite";
 
-      const chatSettings = data?.chatSettings || {
-        responseLength: data?.responseLength || "brief",
-        tone: "formal",
-        focusMode: "balanced",
-        explanationStyle: "direct",
-      };
-
       // Temperature is always hardcoded to 0.9
       const temperature = 0.9;
 
@@ -186,14 +120,14 @@ export const chatRouter = createTRPCRouter({
       }
 
       const isSearchDisabled =
-        usageData?.is_disabled || (usageData?.call_count || 0) >= 1450;
-      
+        usageData?.is_disabled || (usageData?.call_count || 0) >= 1500;
+
       // Check if user is premium before allowing search
       const userProfile = await caller.getProfile();
       const isPremium = userProfile.tier === "premium";
-      
-      const useSearch = data?.useSearch && !isSearchDisabled && isPremium;
 
+      // Automatically enable search if within limits and user is premium
+      const useSearch = !isSearchDisabled && isPremium;
       const lastUserMessage = messages[messages.length - 1];
       const userMessageContent = lastUserMessage.content || "";
 
@@ -232,18 +166,8 @@ export const chatRouter = createTRPCRouter({
       });
 
       try {
-        // Prepare system prompt and call LLM
-        const systemPromptObject = createSystemPrompt(modelId, chatSettings);
-        const systemPromptText =
-          (systemPromptObject.parts?.[0] as Part)?.text || "";
-        const contentsForLlm = [
-          { role: "user" as const, parts: [{ text: systemPromptText }] },
-          {
-            role: "model" as const,
-            parts: [{ text: "Okay, I will follow these instructions." }],
-          },
-          ...messagesForLlm,
-        ];
+        // Call LLM directly without system prompt
+        const contentsForLlm = messagesForLlm;
 
         const groundingTool = {
           googleSearch: {},
@@ -315,7 +239,7 @@ export const chatRouter = createTRPCRouter({
               {
                 date: today,
                 call_count: (usageData?.call_count || 0) + 1,
-                is_disabled: (usageData?.call_count || 0) + 1 >= 1450,
+                is_disabled: (usageData?.call_count || 0) + 1 >= 1500,
               },
               { onConflict: "date" }
             );

@@ -1,6 +1,5 @@
 import { vanillaTrpcClient } from "@/lib/trpc/client";
 import { GeminiModelId, Message } from "@/types";
-import { ChatSettings } from "@/types/settings";
 
 // Helper function to convert a file to a base64 string
 const fileToBase64 = (file: File): Promise<string> => {
@@ -46,17 +45,15 @@ export const sendChatMessage = async (
   data: {
     modelId: GeminiModelId;
     chatId: string;
-    chatSettings: ChatSettings;
     attachment_url?: string;
     attachment_content?: string;
     attachment_name?: string;
     attachment_type?: string;
-  },
-  useSearch?: boolean
+  }
 ) => {
   return await vanillaTrpcClient.chat.sendMessage.mutate({
     messages,
-    data: { ...data, useSearch },
+    data,
   });
 };
 

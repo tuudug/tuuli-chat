@@ -9,11 +9,8 @@ import TextareaAutosize from "react-textarea-autosize";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
-import { ChatSettings } from "@/types/settings";
 import { Message } from "@/types/messages";
 import ModelSelector from "./ModelSelector";
-import AdvancedChatSettings from "./AdvancedChatSettings";
-import ToolsSelector from "./ToolsSelector";
 import { useMessageLimit } from "@/contexts/MessageLimitContext";
 
 // Custom hook to get the previous value of a prop or state
@@ -32,16 +29,13 @@ interface ChatInputAreaProps {
   ) => void;
   handleFormSubmit: (
     e: React.FormEvent<HTMLFormElement>,
-    attachment?: File | null,
-    useSearch?: boolean
+    attachment?: File | null
   ) => void; // Modified to accept optional attachment
   selectedModel: GeminiModelId; // Use GeminiModelId
   setSelectedModel: (model: GeminiModelId) => void; // Use GeminiModelId
   isWaitingForResponse: boolean;
   favoriteModel: GeminiModelId | null;
   onSetFavoriteModel: (modelId: GeminiModelId) => void;
-  chatSettings: ChatSettings;
-  setChatSettings: (settings: ChatSettings) => void;
   messages: Message[]; // Add messages prop for token warning
 }
 
@@ -54,11 +48,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   isWaitingForResponse,
   favoriteModel,
   onSetFavoriteModel,
-  chatSettings,
-  setChatSettings,
   messages,
 }) => {
-  const [useSearch, setUseSearch] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,9 +65,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Check if user has enough messages left
   // Gemini 2.5 Pro uses 2x message count, so disable at 1 remaining message
-  const currentModelDetail = MODEL_DETAILS.find(model => model.id === selectedModel);
+  const currentModelDetail = MODEL_DETAILS.find(
+    (model) => model.id === selectedModel
+  );
   const requiredMessages = currentModelDetail?.cost || 1;
-  const hasEnoughMessages = messageLimit ? messageLimit.remainingMessages >= requiredMessages : true;
+  const hasEnoughMessages = messageLimit
+    ? messageLimit.remainingMessages >= requiredMessages
+    : true;
   const isInputDisabled = isWaitingForResponse || !hasEnoughMessages;
 
   useEffect(() => {
@@ -90,7 +85,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     (model) => model.id === selectedModel
   );
   const supportsFiles = currentModel?.supportsFiles ?? false;
-  const supportsSearch = currentModel?.supportsSearch ?? false;
 
   // Document-level drag and drop handlers to detect dragging anywhere on the page
   useEffect(() => {
@@ -173,7 +167,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleFormSubmit(e, selectedFile, useSearch);
+    handleFormSubmit(e, selectedFile);
     // Clear input and file after submission is handled by the parent
     // setInput(""); // This should be handled by parent if input is controlled there
     if (!isWaitingForResponse) {
@@ -264,19 +258,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 onSetFavoriteModel={onSetFavoriteModel}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <ToolsSelector
-                useSearch={useSearch}
-                setUseSearch={setUseSearch}
-                supportsSearch={supportsSearch}
-                disabled={isInputDisabled}
-              />
-              <AdvancedChatSettings
-                settings={chatSettings}
-                onSettingsChange={setChatSettings}
-                disabled={isInputDisabled}
-              />
-            </div>
+            <div className="flex items-center gap-2"></div>
           </motion.div>
           {/* Input Row */}
           <div className="flex items-end gap-3">
@@ -328,9 +310,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             {/* Send Button */}
             <motion.button
               type="submit"
-              disabled={
-                isInputDisabled || (!input.trim() && !selectedFile)
-              } // Enable if input OR file is present
+              disabled={isInputDisabled || (!input.trim() && !selectedFile)} // Enable if input OR file is present
               className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Send message"
               whileHover={{ scale: 1.05 }}
@@ -411,16 +391,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             >
               <div className="flex items-center gap-1">
                 <div className="flex-shrink-0 w-3 h-3 rounded-full bg-red-600/50 flex items-center justify-center">
-                  <span className="text-red-200 text-[8px] font-bold">
-                    !
-                  </span>
+                  <span className="text-red-200 text-[8px] font-bold">!</span>
                 </div>
                 <div className="flex-1">
                   <p className="text-[10px] leading-tight">
-                    {requiredMessages > 1 
+                    {requiredMessages > 1
                       ? `Need ${requiredMessages} messages for this model. ${messageLimit.remainingMessages} left.`
-                      : "No messages remaining today."
-                    }
+                      : "No messages remaining today."}
                   </p>
                 </div>
               </div>

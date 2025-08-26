@@ -25,8 +25,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     setSelectedModel,
     favoriteModel,
     setFavoriteModel,
-    chatSettings,
-    setChatSettings,
     isLoading,
     isStreaming,
     error,
@@ -102,8 +100,6 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           setSelectedModel={setSelectedModel}
           favoriteModel={favoriteModel}
           onSetFavoriteModel={setFavoriteModel}
-          chatSettings={chatSettings}
-          setChatSettings={setChatSettings}
           isWaitingForResponse={isLoading}
           messages={messages as unknown as Message[]}
         />

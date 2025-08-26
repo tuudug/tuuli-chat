@@ -9,7 +9,6 @@ import {
   DEFAULT_MODEL_ID,
   MODEL_DETAILS,
 } from "@/types";
-import { ChatSettings, DEFAULT_CHAT_SETTINGS } from "@/types/settings";
 import { api } from "@/lib/trpc/client";
 import { useUser } from "@clerk/nextjs";
 import { useLocalStorage } from "./useLocalStorage";
@@ -36,9 +35,6 @@ export const useChat = (chatId: string) => {
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] =
     useState<GeminiModelId>(DEFAULT_MODEL_ID);
-  const [chatSettings, setChatSettings] = useState<ChatSettings>(
-    DEFAULT_CHAT_SETTINGS
-  );
   const [favoriteModel, setFavoriteModel] =
     useLocalStorage<GeminiModelId | null>("favoriteModel", null);
 
@@ -139,8 +135,7 @@ export const useChat = (chatId: string) => {
 
   const handleFormSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
-    attachmentFile?: File | null,
-    useSearch?: boolean
+    attachmentFile?: File | null
   ) => {
     e.preventDefault();
     if (isLoading) return;
@@ -214,9 +209,7 @@ export const useChat = (chatId: string) => {
         await streamMessage(newMessages, {
           modelId: selectedModel,
           chatId: newClientChatId,
-          chatSettings: chatSettings,
           ...attachmentDataForApi,
-          useSearch,
         });
         setIsLoading(false);
         return;
@@ -280,9 +273,7 @@ export const useChat = (chatId: string) => {
     await streamMessage(newMessages, {
       modelId: selectedModel,
       chatId: effectiveChatId,
-      chatSettings: chatSettings,
       ...attachmentDataForApi,
-      useSearch,
     });
 
     setIsLoading(false);
@@ -321,12 +312,10 @@ export const useChat = (chatId: string) => {
     requestData: {
       modelId: GeminiModelId;
       chatId: string;
-      chatSettings: ChatSettings;
       attachment_url?: string;
       attachment_content?: string;
       attachment_name?: string;
       attachment_type?: string;
-      useSearch?: boolean;
     }
   ) => {
     setIsStreaming(true);
@@ -530,7 +519,6 @@ export const useChat = (chatId: string) => {
     chatTitle,
     input,
     selectedModel,
-    chatSettings,
     favoriteModel,
     isLoading,
     isStreaming,
@@ -541,7 +529,6 @@ export const useChat = (chatId: string) => {
     handleInputChange,
     activeFormSubmitHandler: handleFormSubmit,
     setSelectedModel,
-    setChatSettings,
     setFavoriteModel,
     handleExampleQuestionClick,
     isNewChatFlow: false, // No longer used since we have smooth navigation
