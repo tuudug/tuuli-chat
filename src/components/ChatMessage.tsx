@@ -68,12 +68,6 @@ export default function ChatMessage({
   const isImageAttachment =
     isUser && imageType?.startsWith("image/") && displayableImageSrc;
 
-  // Get model identifier
-  const modelIdentifier = message.model_used;
-
-  // Hide model name to keep routing opaque to the user
-  const modelName = null;
-
   // Get timestamp
   const timestamp = message.created_at
     ? new Date(message.created_at).toLocaleTimeString([], {

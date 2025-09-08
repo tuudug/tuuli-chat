@@ -1,19 +1,16 @@
-import React, { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
-import {
-  ChevronDownIcon,
-  StarIcon,
-  FileImageIcon,
-  ChevronUpIcon,
-  SearchIcon,
-  ChevronRightIcon,
-  BrainIcon,
-  ZapIcon,
-  InfoIcon,
-  XIcon,
-} from "lucide-react";
 import GeminiIcon from "@/components/icons/GeminiIcon";
 import { GeminiModelId, MODEL_DETAILS } from "@/types";
+import {
+  BrainIcon,
+  FileImageIcon,
+  InfoIcon,
+  SearchIcon,
+  StarIcon,
+  XIcon,
+  ZapIcon,
+} from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ModelSelectorProps {
   selectedModel: GeminiModelId;
