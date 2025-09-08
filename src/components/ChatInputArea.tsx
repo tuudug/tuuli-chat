@@ -7,10 +7,16 @@ import React, {
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
-import { GeminiModelId, MODEL_DETAILS } from "@/types";
+import {
+  ArrowUpIcon,
+  PlusIcon,
+  XIcon,
+  CheckIcon,
+  PaperclipIcon,
+  BrainIcon,
+} from "lucide-react";
+import { GeminiModelId } from "@/types";
 import { Message } from "@/types/messages";
-import ModelSelector from "./ModelSelector";
 import { useMessageLimit } from "@/contexts/MessageLimitContext";
 
 // Custom hook to get the previous value of a prop or state
@@ -31,11 +37,13 @@ interface ChatInputAreaProps {
     e: React.FormEvent<HTMLFormElement>,
     attachment?: File | null
   ) => void; // Modified to accept optional attachment
-  selectedModel: GeminiModelId; // Use GeminiModelId
-  setSelectedModel: (model: GeminiModelId) => void; // Use GeminiModelId
+  selectedModel: GeminiModelId; // Deprecated: kept for backward compatibility
+  setSelectedModel: (model: GeminiModelId) => void; // Deprecated
   isWaitingForResponse: boolean;
   favoriteModel: GeminiModelId | null;
   onSetFavoriteModel: (modelId: GeminiModelId) => void;
+  thinkLonger: boolean;
+  onToggleThinkLonger: (next: boolean) => void;
   messages: Message[]; // Add messages prop for token warning
 }
 
@@ -43,17 +51,22 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   input,
   handleInputChange,
   handleFormSubmit,
-  selectedModel,
-  setSelectedModel,
+  selectedModel: _selectedModel,
+  setSelectedModel: _setSelectedModel,
   isWaitingForResponse,
-  favoriteModel,
-  onSetFavoriteModel,
+  favoriteModel: _favoriteModel,
+  onSetFavoriteModel: _onSetFavoriteModel,
+  thinkLonger,
+  onToggleThinkLonger,
   messages,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false); // For drag-and-drop
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const plusTriggerRef = useRef<HTMLButtonElement>(null);
+  const plusPopoverRef = useRef<HTMLDivElement>(null);
 
   const wasWaitingForResponse = usePrevious(isWaitingForResponse);
   const { messageLimit } = useMessageLimit();
@@ -64,11 +77,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     lastMessage?.total_tokens && lastMessage.total_tokens > 100000;
 
   // Check if user has enough messages left
-  // Gemini 2.5 Pro uses 2x message count, so disable at 1 remaining message
-  const currentModelDetail = MODEL_DETAILS.find(
-    (model) => model.id === selectedModel
-  );
-  const requiredMessages = currentModelDetail?.cost || 1;
+  // Each message costs 1 now
+  const requiredMessages = 1;
   const hasEnoughMessages = messageLimit
     ? messageLimit.remainingMessages >= requiredMessages
     : true;
@@ -80,11 +90,27 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [isWaitingForResponse, wasWaitingForResponse]);
 
-  // Get current model details to check if it supports files
-  const currentModel = MODEL_DETAILS.find(
-    (model) => model.id === selectedModel
-  );
-  const supportsFiles = currentModel?.supportsFiles ?? false;
+  // Close plus menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        plusPopoverRef.current &&
+        !plusPopoverRef.current.contains(event.target as Node) &&
+        plusTriggerRef.current &&
+        !plusTriggerRef.current.contains(event.target as Node)
+      ) {
+        setShowPlusMenu(false);
+      }
+    };
+
+    if (showPlusMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showPlusMenu]);
+
+  // All models support files now
+  const supportsFiles = true;
 
   // Document-level drag and drop handlers to detect dragging anywhere on the page
   useEffect(() => {
@@ -153,9 +179,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   const triggerFileInput = () => {
-    if (supportsFiles) {
-      fileInputRef.current?.click();
-    }
+    fileInputRef.current?.click();
   };
 
   const clearSelectedFile = () => {
@@ -199,6 +223,18 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   return (
     <div className="sm:px-4 md:px-48 lg:px-64 pb-3 pt-1 sticky bottom-0 z-10 bg-transparent w-full sm:mb-4">
       <div className={`relative transition-opacity duration-300 opacity-100`}>
+        <style jsx>{`
+          @keyframes slideInFromBottom {
+            from {
+              opacity: 0;
+              transform: translateY(8px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
         <form
           onSubmit={onFormSubmit}
           onDragOver={handleFormDragOver}
@@ -209,7 +245,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 ? "border-blue-500 bg-blue-500/10"
                 : "border-red-500 bg-red-500/10"
               : "border-gray-700/50"
-          }`}
+          } ${thinkLonger ? "border-purple-500/60" : ""}`}
         >
           {/* Drag and Drop Overlay */}
           {isDragging && (
@@ -242,52 +278,117 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               </div>
             </div>
           )}
-          {/* Model Selector and Controls */}
-          <motion.div
-            className="mb-2 flex items-center justify-between gap-4"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="flex items-center gap-4">
-              <ModelSelector
-                selectedModel={selectedModel}
-                setSelectedModel={setSelectedModel}
-                disabled={isInputDisabled}
-                favoriteModel={favoriteModel}
-                onSetFavoriteModel={onSetFavoriteModel}
-              />
-            </div>
-            <div className="flex items-center gap-2"></div>
-          </motion.div>
+          {/* Model selector removed - routing handled by backend */}
           {/* Input Row */}
-          <div className="flex items-end gap-3">
-            {/* File Input Button */}
-            <button
-              type="button"
-              onClick={triggerFileInput}
-              disabled={isInputDisabled || !supportsFiles}
-              className={`flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:cursor-not-allowed transition-colors ${
-                supportsFiles
-                  ? "text-gray-400 hover:text-gray-200 disabled:opacity-50"
-                  : "text-gray-600 cursor-not-allowed"
-              }`}
-              aria-label="Attach file"
-              title={
-                supportsFiles
-                  ? "Attach file"
-                  : "File attachments not supported by this model"
-              }
-            >
-              <PaperclipIcon size={16} />
-            </button>
+          <div className="flex items-center gap-3">
+            {/* Plus Menu */}
+            <div className="relative">
+              <button
+                type="button"
+                ref={plusTriggerRef}
+                onClick={() => setShowPlusMenu((v) => !v)}
+                disabled={isInputDisabled}
+                className={`flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:cursor-not-allowed transition-colors text-gray-400 hover:text-gray-200 disabled:opacity-50`}
+                aria-label="More"
+                title="More"
+              >
+                <PlusIcon size={14} />
+              </button>
+              {showPlusMenu && (
+                <>
+                  {/* Backdrop */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowPlusMenu(false)}
+                  />
+                  {/* Popover above, matching ModelSelector aesthetics */}
+                  <div
+                    ref={plusPopoverRef}
+                    className="absolute bottom-full left-0 mb-2 w-72 z-50"
+                    style={{ animation: "slideInFromBottom 100ms ease-out" }}
+                  >
+                    <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl shadow-lg">
+                      <div className="p-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPlusMenu(false);
+                            triggerFileInput();
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg text-gray-200 hover:bg-gray-800/70 transition-colors flex items-center gap-2"
+                        >
+                          <div className="rounded-full p-1 bg-green-500/20">
+                            <PaperclipIcon
+                              size={14}
+                              className="text-green-400"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium">
+                              Attach a file
+                            </div>
+                            <div className="text-[11px] text-gray-400">
+                              Images, PDFs, more
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (messageLimit?.tier === "premium") {
+                              onToggleThinkLonger(!thinkLonger);
+                              setShowPlusMenu(false);
+                            }
+                          }}
+                          disabled={
+                            !messageLimit || messageLimit.tier !== "premium"
+                          }
+                          className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center gap-2 mt-1 ${
+                            messageLimit?.tier === "premium"
+                              ? "text-gray-200 hover:bg-gray-800/70"
+                              : "text-gray-500 cursor-not-allowed"
+                          }`}
+                          title={
+                            messageLimit?.tier === "premium"
+                              ? "Use deeper reasoning for hard tasks"
+                              : "Premium only"
+                          }
+                        >
+                          <div className="rounded-full p-1 bg-blue-500/20">
+                            <BrainIcon size={14} className="text-blue-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium flex items-center gap-2">
+                              <span>Think longer</span>
+                              <span className="text-[10px] bg-yellow-500/20 text-yellow-400 font-semibold px-1.5 py-0.5 rounded-md border border-yellow-500/30">
+                                Premium
+                              </span>
+                              <span className="text-[10px] bg-purple-500/20 text-purple-300 font-semibold px-1.5 py-0.5 rounded-md border border-purple-500/30">
+                                4x
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-400">
+                              Think longer for a better answer
+                            </div>
+                          </div>
+                          {thinkLonger && (
+                            <CheckIcon size={14} className="text-blue-400" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
               // Consider adding 'accept' attribute e.g., accept="image/*,.pdf,.doc,.docx"
-              disabled={isInputDisabled || !supportsFiles}
+              disabled={isInputDisabled}
             />
             {/* Text Input */}
             <TextareaAutosize
@@ -299,7 +400,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   ? "Describe the attachment or ask a question..."
                   : "Type your message here..."
               }
-              className="flex-1 bg-transparent resize-none focus:outline-none text-white placeholder:text-gray-400 text-sm py-2" // Added py-2 for vertical padding
+              className="flex-1 bg-transparent resize-none focus:outline-none text-white placeholder:text-gray-400 text-sm leading-6 py-2"
               minRows={1} // Start with 1 row
               maxRows={6} // Grow up to 6 rows
               rows={1} // Keep initial rows=1
@@ -311,7 +412,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             <motion.button
               type="submit"
               disabled={isInputDisabled || (!input.trim() && !selectedFile)} // Enable if input OR file is present
-              className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Send message"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -324,33 +425,69 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   : { duration: 0.1 }
               }
             >
-              <ArrowUpIcon size={16} />
+              <ArrowUpIcon size={14} />
             </motion.button>
           </div>
-          {/* Selected File Preview */}
-          <AnimatePresence>
-            {selectedFile && (
-              <motion.div
-                className="mt-2 flex items-center justify-between text-xs text-gray-400 bg-gray-800/50 border border-gray-700/50 p-2 rounded"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <span className="truncate">Selected: {selectedFile.name}</span>
-                <motion.button
-                  type="button"
-                  onClick={clearSelectedFile}
-                  className="ml-2 text-gray-400 hover:text-gray-200"
-                  aria-label="Clear selected file"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <XIcon size={14} />
-                </motion.button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Inline chips row: file + think */}
+          {(selectedFile || thinkLonger) && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <AnimatePresence initial={false}>
+                {selectedFile && (
+                  <motion.div
+                    key={`file-${selectedFile.name}-${selectedFile.size}`}
+                    className="inline-flex items-center gap-2 text-xs text-gray-400 bg-gray-800/50 border border-gray-700/50 px-2 py-1 rounded"
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <span className="truncate max-w-[14rem]">
+                      {selectedFile.name}
+                    </span>
+                    <motion.button
+                      type="button"
+                      onClick={clearSelectedFile}
+                      className="text-gray-400 hover:text-gray-200"
+                      aria-label="Clear selected file"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <XIcon size={12} />
+                    </motion.button>
+                  </motion.div>
+                )}
+
+                {thinkLonger && (
+                  <motion.div
+                    key="think-chip"
+                    className="inline-flex items-center gap-2 text-xs text-gray-300 bg-gray-800/50 border border-gray-700/50 px-2 py-1 rounded"
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <div className="rounded-full p-0.5 bg-blue-500/20">
+                      <BrainIcon size={12} className="text-blue-400" />
+                    </div>
+                    <span className="font-medium">Think</span>
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 font-semibold px-1 py-0.5 rounded border border-purple-500/30">
+                      4x
+                    </span>
+                    <motion.button
+                      type="button"
+                      onClick={() => onToggleThinkLonger(false)}
+                      className="text-gray-400 hover:text-gray-200"
+                      aria-label="Disable think longer"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <XIcon size={12} />
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </form>
 
         {/* Token Usage Warning - Bottom Right */}

@@ -3,12 +3,7 @@
 import { useState, useEffect } from "react";
 
 import { v4 as uuidv4 } from "uuid";
-import {
-  Message,
-  GeminiModelId,
-  DEFAULT_MODEL_ID,
-  MODEL_DETAILS,
-} from "@/types";
+import { Message, GeminiModelId, DEFAULT_MODEL_ID } from "@/types";
 import { api } from "@/lib/trpc/client";
 import { useUser } from "@clerk/nextjs";
 import { useLocalStorage } from "./useLocalStorage";
@@ -47,6 +42,7 @@ export const useChat = (chatId: string) => {
 
   // Streaming States
   const [isStreaming, setIsStreaming] = useState(false);
+  const [thinkLonger, setThinkLonger] = useState<boolean>(false);
 
   // New state for handling new chat creation
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
@@ -75,15 +71,7 @@ export const useChat = (chatId: string) => {
       setChatTitle(chatData.title);
       setMessages(chatData.messages as Message[]);
       setHasMore(chatData.messages.length === 10);
-      const lastAssistantMessage = [...(chatData.messages as Message[])]
-        .reverse()
-        .find((msg) => msg.role === "assistant" && msg.model_used);
-      if (
-        lastAssistantMessage?.model_used &&
-        MODEL_DETAILS.some((d) => d.id === lastAssistantMessage.model_used)
-      ) {
-        setSelectedModel(lastAssistantMessage.model_used as GeminiModelId);
-      }
+      // We no longer expose model selection; keep state as default
     }
     if (chatDataError) {
       setError(chatDataError.message);
@@ -100,9 +88,7 @@ export const useChat = (chatId: string) => {
       setError(null);
       setPendingChatId(null);
       setHasMore(false);
-      if (favoriteModel) {
-        setSelectedModel(favoriteModel);
-      }
+      // Model selection removed; do not change selectedModel here
     }
   }, [chatId, favoriteModel]);
 
@@ -210,6 +196,7 @@ export const useChat = (chatId: string) => {
           modelId: selectedModel,
           chatId: newClientChatId,
           ...attachmentDataForApi,
+          thinkLonger,
         });
         setIsLoading(false);
         return;
@@ -274,6 +261,7 @@ export const useChat = (chatId: string) => {
       modelId: selectedModel,
       chatId: effectiveChatId,
       ...attachmentDataForApi,
+      thinkLonger,
     });
 
     setIsLoading(false);
@@ -316,6 +304,7 @@ export const useChat = (chatId: string) => {
       attachment_content?: string;
       attachment_name?: string;
       attachment_type?: string;
+      thinkLonger?: boolean;
     }
   ) => {
     setIsStreaming(true);
@@ -522,6 +511,7 @@ export const useChat = (chatId: string) => {
     favoriteModel,
     isLoading,
     isStreaming,
+    thinkLonger,
     initialFetchLoading,
     isAwaitingFirstToken: isStreaming, // Updated for streaming flow
     error,
@@ -530,6 +520,7 @@ export const useChat = (chatId: string) => {
     activeFormSubmitHandler: handleFormSubmit,
     setSelectedModel,
     setFavoriteModel,
+    setThinkLonger,
     handleExampleQuestionClick,
     isNewChatFlow: false, // No longer used since we have smooth navigation
     uiReadyForNewChat: true, // Always show UI now

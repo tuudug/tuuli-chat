@@ -30,6 +30,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     error,
     initialFetchLoading,
     isAwaitingFirstToken,
+    thinkLonger,
+    setThinkLonger,
     handleExampleQuestionClick,
     userAvatar,
     hasMore,
@@ -101,6 +103,8 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
           favoriteModel={favoriteModel}
           onSetFavoriteModel={setFavoriteModel}
           isWaitingForResponse={isLoading}
+          thinkLonger={thinkLonger}
+          onToggleThinkLonger={setThinkLonger}
           messages={messages as unknown as Message[]}
         />
       </div>

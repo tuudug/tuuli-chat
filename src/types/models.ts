@@ -53,7 +53,7 @@ export const MODEL_DETAILS: ModelDetail[] = [
     version: "2.5",
     performance: "Flash Lite",
     stars: 2,
-    supportsFiles: false,
+    supportsFiles: true,
     supportsSearch: false,
     supportsFast: true,
     cost: 1,
@@ -78,14 +78,15 @@ export const MODEL_DETAILS: ModelDetail[] = [
     version: "2.0",
     performance: "Flash Lite",
     stars: 1,
-    supportsFiles: false,
+    supportsFiles: true,
     supportsSearch: false,
     supportsFast: true,
     cost: 1,
   },
 ];
 
-export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-2.0-flash-lite";
+export const DEFAULT_MODEL_ID: GeminiModelId =
+  "gemini-2.5-flash-lite-preview-06-17";
 
 // Type alias for backward compatibility or specific use cases if needed
 export type GeminiModel = GeminiModelId;

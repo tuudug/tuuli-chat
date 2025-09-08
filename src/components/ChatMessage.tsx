@@ -9,7 +9,7 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import "katex/dist/katex.min.css";
 import { UserIcon, BotIcon, CopyIcon, CheckIcon } from "lucide-react";
-import { Message, MODEL_DETAILS } from "@/types";
+import { Message } from "@/types";
 
 import SearchReferences from "./chat/SearchReferences";
 
@@ -71,10 +71,8 @@ export default function ChatMessage({
   // Get model identifier
   const modelIdentifier = message.model_used;
 
-  const modelName =
-    message.role === "assistant" && modelIdentifier
-      ? MODEL_DETAILS.find((m) => m.id === modelIdentifier)?.name
-      : null;
+  // Hide model name to keep routing opaque to the user
+  const modelName = null;
 
   // Get timestamp
   const timestamp = message.created_at
@@ -305,8 +303,6 @@ export default function ChatMessage({
                 : "opacity-100"
             }`}
           >
-            {modelName && <span className="font-medium">{modelName}</span>}
-            {modelName && timestamp && <span>•</span>}
             <span>{timestamp}</span>
           </div>
         </div>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, createTRPCRouter } from "@/lib/trpc/server";
 import { TRPCError } from "@trpc/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { MODEL_DETAILS, GeminiModelId } from "@/types/models";
+import { GeminiModelId } from "@/types/models";
 
 // User tier definitions
 export const USER_TIERS = {
@@ -72,7 +72,8 @@ async function ensureUserProfileExists(userId: string) {
 
 export async function handleMessageLimit(
   userId: string,
-  modelId: GeminiModelId
+  modelId: GeminiModelId,
+  overrideMessageCost?: number
 ) {
   const userProfile = await ensureUserProfileExists(userId);
 
@@ -98,9 +99,8 @@ export async function handleMessageLimit(
     });
   }
 
-  // Determine message cost
-  const model = MODEL_DETAILS.find((m) => m.id === modelId);
-  const messageCost = model?.cost || 1;
+  // Default uniform cost is 1; allow override for special modes (e.g., Think Longer)
+  const messageCost = Math.max(1, overrideMessageCost ?? 1);
 
   // Increment the count
   const newCount = isNewDay ? messageCost : currentCount + messageCost;
@@ -128,10 +128,11 @@ export async function handleMessageLimit(
 // Function to refund message cost when API fails
 export async function refundMessageCost(
   userId: string,
-  modelId: GeminiModelId
+  modelId: GeminiModelId,
+  overrideMessageCost?: number
 ) {
   const supabaseAdmin = createSupabaseServiceRoleClient();
-  
+
   // Get current user profile
   const { data: userProfile, error: profileError } = await supabaseAdmin
     .from("user_profiles")
@@ -144,9 +145,8 @@ export async function refundMessageCost(
     return { success: false, error: "Failed to get user profile" };
   }
 
-  // Determine message cost to refund
-  const model = MODEL_DETAILS.find((m) => m.id === modelId);
-  const messageCost = model?.cost || 1;
+  // Uniform refund is 1 unless overridden
+  const messageCost = Math.max(1, overrideMessageCost ?? 1);
 
   // Calculate new count (ensure it doesn't go below 0)
   const newCount = Math.max(0, userProfile.daily_message_count - messageCost);

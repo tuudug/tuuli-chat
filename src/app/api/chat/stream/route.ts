@@ -74,9 +74,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { messages, data: requestData } = body;
 
-    const modelId = requestData?.modelId || "gemini-2.0-flash-lite";
-    // Handle message limit logic
-    await handleMessageLimit(userId, modelId);
+    const { data: _data } = body; // no-op to keep body shape stable
 
     // Get the Clerk JWT token to pass to Supabase for RLS
     const clerkToken = await getToken({ template: "supabase" });
@@ -116,7 +114,7 @@ export async function POST(req: NextRequest) {
       try {
         const supabaseServiceAdmin = createSupabaseServiceRoleClient();
 
-        // Save the user message first
+        // Prepare latest user message
         const lastUserMessage = messages[messages.length - 1];
         const userMessageContent = lastUserMessage.content || "";
 
@@ -137,12 +135,58 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        // 1) Decide which model to use via router call (Gemini 2.5 Flash Lite)
+        const thinkLonger = !!requestData?.thinkLonger;
+        const routerModelId = "gemini-2.5-flash-lite-preview-06-17";
+        const routingPrompt = `You are a router. Classify the user’s message into one of three categories:\n1. Lite → For simple, everyday, casual, or short tasks. Example: greetings, quick questions, summaries, basic explanations.\n2. Flash → For moderately complex tasks that require reasoning, multi-step answers, or structured explanations. Example: research-style queries, detailed comparisons, multi-step problem solving.\n3. Pro → For highly complex or technical tasks, such as coding, algorithms, debugging, advanced math, or when the task requires very deep reasoning.\nOutput only one word: "Lite", "Flash", or "Pro".\n\n<previous_messages_in_conversation>\n${messages
+          .slice(0, -1)
+          .map(
+            (m: { role: string; content: string }) => `${m.role}: ${m.content}`
+          )
+          .join(
+            "\n"
+          )}\n</previous_messages_in_conversation>\n\n<user_message>\n${userMessageContent}\n</user_message>`;
+
+        let chosenModelId:
+          | "gemini-2.5-pro"
+          | "gemini-2.5-flash"
+          | "gemini-2.5-flash-lite-preview-06-17";
+        if (thinkLonger) {
+          chosenModelId = "gemini-2.5-pro";
+        } else {
+          const routingResult = await genAI.models.generateContent({
+            model: routerModelId,
+            contents: [{ role: "user", parts: [{ text: routingPrompt }] }],
+          });
+          const routeDecisionRaw = (
+            routingResult.text ||
+            routingResult.responseId ||
+            ""
+          )
+            .toString()
+            .trim();
+          const routeDecision = routeDecisionRaw
+            .replace(/^[^A-Za-z]*|[^A-Za-z]*$/g, "")
+            .toLowerCase();
+          chosenModelId =
+            routeDecision === "pro"
+              ? "gemini-2.5-pro"
+              : routeDecision === "flash"
+              ? "gemini-2.5-flash"
+              : "gemini-2.5-flash-lite-preview-06-17";
+        }
+
+        // 2) Check and increment message limits (Think Longer costs 4x)
+        const overrideMessageCost = thinkLonger ? 4 : undefined;
+        await handleMessageLimit(userId, chosenModelId, overrideMessageCost);
+
+        // 3) Save the user message with the chosen model
         await supabase.from("messages").insert({
           chat_id: chatId,
           user_id: userId,
           role: "user",
           content: userMessageContent,
-          model_used: modelId,
+          model_used: chosenModelId,
           attachment_url:
             attachmentData?.url || requestData?.attachment_url || null,
           attachment_name:
@@ -175,6 +219,13 @@ export async function POST(req: NextRequest) {
           .single();
 
         const isPremium = userProfile?.tier === "premium";
+        // Enforce premium for thinkLonger
+        if (thinkLonger && !isPremium) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Think longer is available for premium users only.",
+          });
+        }
 
         const isSearchDisabled =
           usageData?.is_disabled || (usageData?.call_count || 0) >= 1500;
@@ -221,7 +272,7 @@ export async function POST(req: NextRequest) {
             // Only include tools if useSearch is true
             ...(useSearch && { tools: [groundingTool] }),
           },
-          model: modelId,
+          model: chosenModelId,
           contents: contentsForLlm,
         });
         // --- END of LLM Call modification ---
@@ -240,7 +291,7 @@ export async function POST(req: NextRequest) {
           id: assistantMessageId,
           role: "assistant",
           created_at: new Date().toISOString(),
-          model_used: modelId,
+          model_used: chosenModelId,
         });
 
         for await (const chunk of resultStream) {
@@ -298,7 +349,7 @@ export async function POST(req: NextRequest) {
           );
 
           // Refund the user's message cost
-          await refundMessageCost(userId, modelId);
+          await refundMessageCost(userId, chosenModelId, overrideMessageCost);
 
           // Send error message instead of empty content
           const errorMessage =
@@ -309,7 +360,7 @@ export async function POST(req: NextRequest) {
             role: "assistant",
             content: errorMessage,
             created_at: new Date().toISOString(),
-            model_used: modelId,
+            model_used: chosenModelId,
             search_references: [],
             prompt_tokens: null,
             completion_tokens: null,
@@ -342,7 +393,7 @@ export async function POST(req: NextRequest) {
               user_id: userId,
               role: "assistant",
               content: assistantResponseText,
-              model_used: modelId,
+              model_used: chosenModelId,
               search_references: searchReferences, // Save references
               prompt_tokens: adjustedPromptTokens,
               completion_tokens: completionTokens,
@@ -384,7 +435,7 @@ export async function POST(req: NextRequest) {
           role: "assistant",
           content: assistantResponseText,
           created_at: new Date().toISOString(),
-          model_used: modelId,
+          model_used: chosenModelId,
           search_references: searchReferences, // Send references to client
           prompt_tokens: adjustedPromptTokens,
           completion_tokens: completionTokens,
