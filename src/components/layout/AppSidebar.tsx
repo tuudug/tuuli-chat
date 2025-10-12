@@ -2,7 +2,7 @@
 
 import ChatHistoryList from "@/components/chat/ChatHistoryList";
 import UserProfileWidget from "@/components/user/UserProfileWidget";
-import ChatImageToggle from "@/components/ChatImageToggle";
+import SidebarModeSelect from "@/components/SidebarModeSelect";
 import { PlusIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -44,7 +44,7 @@ const AppSidebarContent = () => {
             className="w-auto h-10 max-w-[120px] cursor-pointer hover:opacity-80 transition-opacity"
             priority
           />
-          <ChatImageToggle />
+          <SidebarModeSelect />
         </div>
       </div>
 

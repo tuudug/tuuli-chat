@@ -3,6 +3,7 @@ import { protectedProcedure, createTRPCRouter } from "@/lib/trpc/server";
 import { TRPCError } from "@trpc/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { USER_TIERS } from "./user";
 
 const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
@@ -82,7 +83,28 @@ export const imageRouter = createTRPCRouter({
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Unauthorized" });
       }
 
+      // Check if user is premium
       const supabaseServiceAdmin = createSupabaseServiceRoleClient();
+      const { data: userProfile, error: profileError } =
+        await supabaseServiceAdmin
+          .from("user_profiles")
+          .select("tier")
+          .eq("id", user.id)
+          .single();
+
+      if (profileError || !userProfile) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch user profile",
+        });
+      }
+
+      if (userProfile.tier !== USER_TIERS.PREMIUM) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Image editing is only available for Premium users",
+        });
+      }
 
       // 1) Ensure thread exists
       let threadId = input.threadId ?? null;

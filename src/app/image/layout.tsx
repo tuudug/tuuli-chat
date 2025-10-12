@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MenuIcon } from "lucide-react";
 import ImageHistorySidebar from "@/components/image/ImageEditorSidebar";
+import { MessageLimitProvider } from "@/contexts/MessageLimitContext";
 
 interface ImageAppLayoutProps {
   children: React.ReactNode;
@@ -47,7 +48,8 @@ export default function ImageAppLayout({ children }: ImageAppLayoutProps) {
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden">
+    <MessageLimitProvider>
+      <div className="flex h-screen relative overflow-hidden">
       <AnimatePresence initial={false}>
         {isSidebarOpen && (
           <motion.div
@@ -110,5 +112,6 @@ export default function ImageAppLayout({ children }: ImageAppLayoutProps) {
         {children}
       </div>
     </div>
+    </MessageLimitProvider>
   );
 }

@@ -5,6 +5,7 @@ import { useParams, useSearchParams, notFound } from "next/navigation";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ImageEditorInterface from "@/components/image/ImageEditorInterface";
 import { api } from "@/lib/trpc/client";
+import PremiumGate from "@/components/PremiumGate";
 
 type ValidationStatus = "valid" | "not_found" | "unauthorized" | "loading";
 
@@ -56,5 +57,9 @@ export default function ImageThreadPage() {
     notFound();
   }
 
-  return <ImageEditorInterface imageId={threadId} />;
+  return (
+    <PremiumGate featureName="Image Editor">
+      <ImageEditorInterface imageId={threadId} />
+    </PremiumGate>
+  );
 }

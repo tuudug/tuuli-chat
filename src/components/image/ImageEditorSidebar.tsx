@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
 import Image from "next/image";
-import ChatImageToggle from "@/components/ChatImageToggle";
+import SidebarModeSelect from "@/components/SidebarModeSelect";
 import ImageThreadList from "@/components/image/ImageThreadList";
 
 export default function ImageHistorySidebar() {
@@ -21,7 +21,7 @@ export default function ImageHistorySidebar() {
             className="w-auto h-10 max-w-[120px] cursor-pointer hover:opacity-80 transition-opacity"
             priority
           />
-          <ChatImageToggle />
+          <SidebarModeSelect />
         </div>
       </div>
 
