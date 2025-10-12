@@ -67,6 +67,102 @@ export type Database = {
         }
         Relationships: []
       }
+      image_threads: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "image_threads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      image_turns: {
+        Row: {
+          completion_tokens: number | null
+          created_at: string
+          error: string | null
+          id: string
+          input_image_url: string | null
+          model_id: string | null
+          output_image_url: string | null
+          prompt: string
+          prompt_tokens: number | null
+          thread_id: string
+          total_tokens: number | null
+          user_id: string
+        }
+        Insert: {
+          completion_tokens?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_image_url?: string | null
+          model_id?: string | null
+          output_image_url?: string | null
+          prompt: string
+          prompt_tokens?: number | null
+          thread_id: string
+          total_tokens?: number | null
+          user_id: string
+        }
+        Update: {
+          completion_tokens?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_image_url?: string | null
+          model_id?: string | null
+          output_image_url?: string | null
+          prompt?: string
+          prompt_tokens?: number | null
+          thread_id?: string
+          total_tokens?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "image_turns_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "image_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "image_turns_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "image_threads_with_latest"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "image_turns_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachment_name: string | null
@@ -198,7 +294,26 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      image_threads_with_latest: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          latest_output_image_url: string | null
+          latest_turn_created_at: string | null
+          turn_count: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "image_threads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       calculate_sparks_cost: {
@@ -233,6 +348,10 @@ export type Database = {
       }
       is_chat_owner: {
         Args: { chat_uuid: string }
+        Returns: boolean
+      }
+      is_image_thread_owner: {
+        Args: { p_thread_id: string }
         Returns: boolean
       }
       log_and_spend_sparks_for_assistant_message: {

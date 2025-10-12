@@ -2,6 +2,7 @@
 
 import ChatHistoryList from "@/components/chat/ChatHistoryList";
 import UserProfileWidget from "@/components/user/UserProfileWidget";
+import ChatImageToggle from "@/components/ChatImageToggle";
 import { PlusIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -33,7 +34,7 @@ const AppSidebarContent = () => {
   return (
     <div className="relative h-full flex flex-col bg-bg-sidebar text-text-primary space-y-4">
       <div className="pt-6 px-3">
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center gap-3">
           <Image
             src="/logo.png"
             alt="Logo"
@@ -43,6 +44,7 @@ const AppSidebarContent = () => {
             className="w-auto h-10 max-w-[120px] cursor-pointer hover:opacity-80 transition-opacity"
             priority
           />
+          <ChatImageToggle />
         </div>
       </div>
 
@@ -59,6 +61,7 @@ const AppSidebarContent = () => {
         </Link>
       </div>
 
+      {/* Chat threads only */}
       <ChatHistoryList />
       <UserProfileWidget />
     </div>
