@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { api } from "@/lib/trpc/client";
 import { Upload, Copy, Check, AlertCircle, X, FilePlus2 } from "lucide-react";
 import Image from "next/image";
@@ -118,6 +118,32 @@ export default function TranscribePage() {
     }
   }, []);
 
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      if (selectedImage) {
+        return;
+      }
+      const items = event.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            handleFileSelect(file);
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [handleFileSelect, selectedImage]);
+
   return (
     <PremiumGate featureName="Math Transcription">
       <div className="flex h-full w-full flex-col bg-bg-primary">
@@ -176,7 +202,7 @@ export default function TranscribePage() {
               >
                 <Upload className="mb-4 h-16 w-16 text-text-tertiary" />
                 <p className="mb-2 text-lg font-medium text-text-primary">
-                  Drag and drop an image
+                  Drag and drop an image or paste from clipboard
                 </p>
                 <p className="text-sm text-text-secondary">
                   or click to browse
