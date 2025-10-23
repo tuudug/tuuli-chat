@@ -2,9 +2,129 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { api } from "@/lib/trpc/client";
-import { Upload, Copy, Check, AlertCircle, X, FilePlus2 } from "lucide-react";
+import {
+  Upload,
+  Copy,
+  Check,
+  AlertCircle,
+  X,
+  FilePlus2,
+  RotateCcw,
+} from "lucide-react";
 import Image from "next/image";
 import PremiumGate from "@/components/PremiumGate";
+
+type TranscribePayload = {
+  image: {
+    content: string;
+    name: string;
+    type: string;
+  };
+};
+
+function RetryStatus({
+  retryCount,
+  retryCountdown,
+  pendingRetryDelay,
+}: {
+  retryCount: number;
+  retryCountdown: number | null;
+  pendingRetryDelay: number | null;
+}) {
+  if (retryCount <= 0 && !pendingRetryDelay && retryCountdown === null) {
+    return null;
+  }
+
+  const currentDelay =
+    retryCountdown !== null ? retryCountdown : pendingRetryDelay;
+
+  return (
+    <div className="flex flex-col items-center gap-1 text-xs text-text-tertiary">
+      <div className="flex items-center gap-1">
+        <RotateCcw className="h-3.5 w-3.5" />
+        <span>
+          {retryCount > 0
+            ? `Attempt ${retryCount + 1}`
+            : currentDelay !== null
+            ? "Scheduling retry"
+            : "Retry queued"}
+        </span>
+      </div>
+      {currentDelay !== null ? (
+        <span className="text-text-secondary">
+          Retrying in {Math.max(currentDelay, 0)}s
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function EmptyResultState({
+  hasSelectedImage,
+  retryCount,
+  retryCountdown,
+  pendingRetryDelay,
+  lastErrorMessage,
+}: {
+  hasSelectedImage: boolean;
+  retryCount: number;
+  retryCountdown: number | null;
+  pendingRetryDelay: number | null;
+  lastErrorMessage: string | null;
+}) {
+  if (!hasSelectedImage) {
+    return (
+      <p className="text-white">
+        Upload an image to see the transcribed text here
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <p className="text-white">Processing image…</p>
+      {lastErrorMessage ? (
+        <p className="max-w-xs text-wrap text-xs text-red-300">
+          {lastErrorMessage}
+        </p>
+      ) : null}
+      <RetryStatus
+        retryCount={retryCount}
+        retryCountdown={retryCountdown}
+        pendingRetryDelay={pendingRetryDelay}
+      />
+    </div>
+  );
+}
+
+function ErrorState({
+  message,
+  retryCount,
+  retryCountdown,
+  pendingRetryDelay,
+}: {
+  message: string | undefined;
+  retryCount: number;
+  retryCountdown: number | null;
+  pendingRetryDelay: number | null;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+      <AlertCircle className="h-12 w-12 text-red-500" />
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-text-primary">Unable to transcribe right now</p>
+        <p className="text-sm text-text-secondary">
+          {message || "Model returned an error. We'll retry automatically."}
+        </p>
+      </div>
+      <RetryStatus
+        retryCount={retryCount}
+        retryCountdown={retryCountdown}
+        pendingRetryDelay={pendingRetryDelay}
+      />
+    </div>
+  );
+}
 
 export default function TranscribePage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -13,19 +133,128 @@ export default function TranscribePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [pendingRetryDelay, setPendingRetryDelay] = useState<number | null>(
+    null
+  );
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const [showWarning, setShowWarning] = useState(true);
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingRetryFnRef = useRef<(() => void) | null>(null);
+  const lastPayloadRef = useRef<TranscribePayload | null>(null);
+  const retryDelayRef = useRef(1);
+  const retryDeadlineRef = useRef<number | null>(null);
+  const isRetryScheduledRef = useRef(false);
+
+  const clearRetryTimers = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    if (retryIntervalRef.current) {
+      clearInterval(retryIntervalRef.current);
+      retryIntervalRef.current = null;
+    }
+    pendingRetryFnRef.current = null;
+    retryDeadlineRef.current = null;
+    isRetryScheduledRef.current = false;
+  }, []);
+
+  const resetRetryState = useCallback(() => {
+    clearRetryTimers();
+    setPendingRetryDelay(null);
+    setRetryCountdown(null);
+    isRetryScheduledRef.current = false;
+  }, [clearRetryTimers]);
+
+  useEffect(() => {
+    return () => {
+      clearRetryTimers();
+    };
+  }, [clearRetryTimers]);
+
+  const scheduleRetry = useCallback(
+    (delaySeconds: number, retryFn: () => void) => {
+      clearRetryTimers();
+      pendingRetryFnRef.current = retryFn;
+      retryDeadlineRef.current = Date.now() + delaySeconds * 1000;
+      setPendingRetryDelay(delaySeconds);
+      setRetryCountdown(delaySeconds);
+      isRetryScheduledRef.current = true;
+
+      retryIntervalRef.current = setInterval(() => {
+        if (!retryDeadlineRef.current) {
+          setRetryCountdown(null);
+          return;
+        }
+        const msRemaining = Math.max(retryDeadlineRef.current - Date.now(), 0);
+        const secondsRemaining = Math.ceil(msRemaining / 1000);
+        setRetryCountdown(secondsRemaining > 0 ? secondsRemaining : 0);
+      }, 250);
+
+      retryTimeoutRef.current = setTimeout(() => {
+        const pendingFn = pendingRetryFnRef.current;
+        resetRetryState();
+        if (pendingFn) {
+          pendingFn();
+        }
+      }, delaySeconds * 1000);
+    },
+    [clearRetryTimers, resetRetryState]
+  );
 
   const transcribeMutation = api.transcribe.transcribe.useMutation({
     onSuccess: (data: { success: boolean; text: string }) => {
       setTranscribedText(data.text);
       setRetryCount(0);
+      setLastErrorMessage(null);
+      retryDelayRef.current = 1;
+      resetRetryState();
     },
     onError: (error: unknown) => {
       console.error("Transcription error:", error);
-      setRetryCount(0);
+
+      if (!lastPayloadRef.current) {
+        setRetryCount(0);
+        retryDelayRef.current = 1;
+        resetRetryState();
+        setLastErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+        return;
+      }
+
+      setRetryCount((prev) => prev + 1);
+
+      const errorMessage =
+        (error instanceof Error ? error.message : String(error)) ||
+        "Unknown error";
+      setLastErrorMessage(errorMessage);
+
+      const currentDelay = retryDelayRef.current;
+      const retryFn = () => {
+        retryNow();
+      };
+
+      scheduleRetry(currentDelay, retryFn);
+      retryDelayRef.current = Math.min(currentDelay * 2, 20);
     },
   });
+
+  const performTranscription = useCallback(() => {
+    if (!lastPayloadRef.current || isRetryScheduledRef.current) {
+      return;
+    }
+    transcribeMutation.reset();
+    transcribeMutation.mutate(lastPayloadRef.current);
+  }, [transcribeMutation]);
+
+  const retryNow = useCallback(() => {
+    resetRetryState();
+    performTranscription();
+  }, [performTranscription, resetRetryState]);
 
   const handleFileSelect = useCallback(
     (file: File) => {
@@ -42,19 +271,24 @@ export default function TranscribePage() {
         setTranscribedText("");
         setCopied(false);
         setRetryCount(0);
+        retryDelayRef.current = 1;
+        resetRetryState();
+        setLastErrorMessage(null);
 
-        // Auto-transcribe on image upload
-        transcribeMutation.mutate({
+        const payload: TranscribePayload = {
           image: {
             content: result,
             name: file.name,
             type: file.type,
           },
-        });
+        };
+
+        lastPayloadRef.current = payload;
+        retryNow();
       };
       reader.readAsDataURL(file);
     },
-    [transcribeMutation]
+    [resetRetryState, retryNow]
   );
 
   const handleDrop = useCallback(
@@ -102,10 +336,14 @@ export default function TranscribePage() {
     setTranscribedText("");
     setCopied(false);
     setRetryCount(0);
+    setLastErrorMessage(null);
+    lastPayloadRef.current = null;
+    retryDelayRef.current = 1;
+    resetRetryState();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
+  }, [resetRetryState]);
 
   const handleNew = useCallback(() => {
     setSelectedImage(null);
@@ -113,10 +351,14 @@ export default function TranscribePage() {
     setTranscribedText("");
     setCopied(false);
     setRetryCount(0);
+    setLastErrorMessage(null);
+    lastPayloadRef.current = null;
+    retryDelayRef.current = 1;
+    resetRetryState();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
+  }, [resetRetryState]);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -270,26 +512,24 @@ export default function TranscribePage() {
 
             <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-border-primary bg-bg-secondary">
               {transcribeMutation.isPending ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4">
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
                   <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
                   <p className="text-text-secondary">
                     Transcribing your content...
                   </p>
-                  {retryCount > 0 && (
-                    <p className="text-xs text-text-tertiary">
-                      Retrying... (attempt {retryCount})
-                    </p>
-                  )}
+                  <RetryStatus
+                    retryCount={retryCount}
+                    retryCountdown={retryCountdown}
+                    pendingRetryDelay={pendingRetryDelay}
+                  />
                 </div>
               ) : transcribeMutation.isError ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-                  <AlertCircle className="h-12 w-12 text-red-500" />
-                  <p className="text-text-primary">Transcription failed</p>
-                  <p className="text-sm text-text-secondary">
-                    {transcribeMutation.error?.message ||
-                      "An error occurred while transcribing"}
-                  </p>
-                </div>
+                <ErrorState
+                  message={transcribeMutation.error?.message}
+                  retryCount={retryCount}
+                  retryCountdown={retryCountdown}
+                  pendingRetryDelay={pendingRetryDelay}
+                />
               ) : transcribedText ? (
                 <div className="flex-1 overflow-auto p-4">
                   <pre className="whitespace-pre-wrap font-mono text-sm text-text-primary">
@@ -298,9 +538,13 @@ export default function TranscribePage() {
                 </div>
               ) : (
                 <div className="flex flex-1 items-center justify-center">
-                  <p className="text-white">
-                    Upload an image to see the transcribed text here
-                  </p>
+                  <EmptyResultState
+                    hasSelectedImage={Boolean(selectedImage)}
+                    retryCount={retryCount}
+                    retryCountdown={retryCountdown}
+                    pendingRetryDelay={pendingRetryDelay}
+                    lastErrorMessage={lastErrorMessage}
+                  />
                 </div>
               )}
             </div>

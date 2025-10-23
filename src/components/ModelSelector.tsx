@@ -28,7 +28,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   onSetFavoriteModel,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [showLegacyModels, setShowLegacyModels] = useState(false);
+  const [showLegacyModels, _setShowLegacyModels] = useState(false);
   const [hoveredModel, setHoveredModel] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(false);

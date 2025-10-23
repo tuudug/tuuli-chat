@@ -6,7 +6,9 @@ interface ImageEditorHeaderProps {
   title: string | null;
 }
 
-const ImageEditorHeader: React.FC<ImageEditorHeaderProps> = ({ title }) => {
+const ImageEditorHeader: React.FC<ImageEditorHeaderProps> = ({
+  title: _title,
+}) => {
   return (
     <div className="px-4 md:px-6 lg:px-8 py-5 border-b border-border-primary">
       <div className="flex items-center justify-end">
