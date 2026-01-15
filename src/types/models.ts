@@ -1,6 +1,8 @@
 // --- Model Definitions ---
 
 export type GeminiModelId =
+  | "gemini-3-pro-preview"
+  | "gemini-3-flash-preview"
   | "gemini-2.5-pro"
   | "gemini-2.5-flash"
   | "gemini-2.5-flash-lite-preview-06-17"
@@ -21,6 +23,31 @@ export interface ModelDetail {
 }
 
 export const MODEL_DETAILS: ModelDetail[] = [
+  // Gemini 3 Models
+  {
+    id: "gemini-3-pro-preview",
+    name: "Gemini 3 Pro",
+    description: "Latest Pro model with highest performance and accuracy",
+    version: "2.5",
+    performance: "Pro",
+    stars: 5,
+    supportsFiles: true,
+    supportsSearch: true,
+    supportsFast: false,
+    cost: 2,
+  },
+  {
+    id: "gemini-3-flash-preview",
+    name: "Gemini 3 Flash",
+    description: "Latest Flash model - fast and efficient with excellent performance",
+    version: "2.5",
+    performance: "Flash",
+    stars: 4,
+    supportsFiles: true,
+    supportsSearch: true,
+    supportsFast: false,
+    cost: 1,
+  },
   // Gemini 2.5 Models
   {
     id: "gemini-2.5-pro",

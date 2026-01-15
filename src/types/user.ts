@@ -19,12 +19,12 @@ export type UserProfile = {
 
 export const LIMITS = {
   NON_VERIFIED: {
-    GENERAL_MESSAGES_PER_DAY: 100,
-    PRO_MESSAGES_PER_DAY: 10,
+    GENERAL_MESSAGES_PER_DAY: 0, // Basic users cannot send messages (resource constraints)
+    PRO_MESSAGES_PER_DAY: 0,
   },
   VERIFIED: {
     GENERAL_MESSAGES_PER_DAY: Infinity,
     PRO_MESSAGES_PER_DAY: 500,
   },
-  PRO_MODEL_ID: "gemini-2.5-pro" as GeminiModelId,
+  PRO_MODEL_ID: "gemini-3-pro-preview" as GeminiModelId,
 };

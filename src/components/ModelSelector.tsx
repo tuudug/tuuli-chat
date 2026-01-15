@@ -120,6 +120,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const getModelTooltipContent = (model: (typeof MODEL_DETAILS)[0]) => {
     switch (model.id) {
+      case "gemini-3-pro-preview":
       case "gemini-2.5-pro":
         return {
           bestFor: ["Complex reasoning", "Advanced coding", "Multimodal tasks"],
@@ -130,6 +131,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
           ],
           icon: BrainIcon,
         };
+      case "gemini-3-flash-preview":
       case "gemini-2.5-flash":
         return {
           bestFor: ["Fast responses", "Smart reasoning", "Code & math"],

@@ -135,9 +135,9 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        // 1) Decide which model to use via router call (Gemini 2.5 Flash Lite)
+        // 1) Decide which model to use via router call (Gemini 3 Flash)
         const thinkLonger = !!requestData?.thinkLonger;
-        const routerModelId = "gemini-2.5-flash-lite-preview-06-17";
+        const routerModelId = "gemini-3-flash-preview";
         const routingPrompt = `You are a router. Classify the user’s message into one of three categories:\n1. Lite → For simple, everyday, casual, or short tasks. Example: greetings, quick questions, summaries, basic explanations.\n2. Flash → For moderately complex tasks that require reasoning, multi-step answers, or structured explanations. Example: research-style queries, detailed comparisons, multi-step problem solving.\n3. Pro → For highly complex or technical tasks, such as coding, algorithms, debugging, advanced math, or when the task requires very deep reasoning.\nOutput only one word: "Lite", "Flash", or "Pro".\n\n<previous_messages_in_conversation>\n${messages
           .slice(0, -1)
           .map(
@@ -147,12 +147,9 @@ export async function POST(req: NextRequest) {
             "\n"
           )}\n</previous_messages_in_conversation>\n\n<user_message>\n${userMessageContent}\n</user_message>`;
 
-        let chosenModelId:
-          | "gemini-2.5-pro"
-          | "gemini-2.5-flash"
-          | "gemini-2.5-flash-lite-preview-06-17";
+        let chosenModelId: "gemini-3-pro-preview" | "gemini-3-flash-preview";
         if (thinkLonger) {
-          chosenModelId = "gemini-2.5-pro";
+          chosenModelId = "gemini-3-pro-preview";
         } else {
           const routingResult = await genAI.models.generateContent({
             model: routerModelId,
@@ -170,10 +167,8 @@ export async function POST(req: NextRequest) {
             .toLowerCase();
           chosenModelId =
             routeDecision === "pro"
-              ? "gemini-2.5-pro"
-              : routeDecision === "flash"
-              ? "gemini-2.5-flash"
-              : "gemini-2.5-flash-lite-preview-06-17";
+              ? "gemini-3-pro-preview"
+              : "gemini-3-flash-preview";
         }
 
         // 2) Check and increment message limits (Think Longer costs 4x)

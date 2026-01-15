@@ -10,7 +10,7 @@ const genAI = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY!,
 });
 
-const TRANSCRIBE_MODEL = "gemini-2.5-pro";
+const TRANSCRIBE_MODEL = "gemini-3-pro-preview";
 
 // Retry configuration
 const MAX_RETRIES = 100; // Will retry for up to ~5 seconds

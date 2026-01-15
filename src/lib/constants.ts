@@ -4,6 +4,15 @@ export const MODEL_PRICES: Record<
   GeminiModelId,
   { input: number; output: number }
 > = {
+  // Gemini 3 Models
+  "gemini-3-pro-preview": {
+    input: 1.25 / 1_000_000,
+    output: 10.0 / 1_000_000,
+  },
+  "gemini-3-flash-preview": {
+    input: 0.3 / 1_000_000,
+    output: 2.5 / 1_000_000,
+  },
   // Gemini 2.5 Models
   "gemini-2.5-pro": {
     input: 1.25 / 1_000_000,
@@ -40,10 +49,16 @@ export const MODEL_MULTIPLIERS: Record<GeminiModelId, number> = {
   "gemini-2.5-flash-lite-preview-06-17": 0.2, // Same tier as 2.0-flash
   "gemini-2.5-flash": 1.0, // Baseline - balanced performance/cost
   "gemini-2.5-pro": 4.0, // Premium tier - highest capability
+
+  // Gemini 3 Models
+  "gemini-3-flash-preview": 1.0, // Same as 2.5 flash
+  "gemini-3-pro-preview": 4.0, // Premium tier - highest capability
 };
 
 // Model display names for UI
 export const MODEL_DISPLAY_NAMES: Record<GeminiModelId, string> = {
+  "gemini-3-pro-preview": "Pro",
+  "gemini-3-flash-preview": "Flash",
   "gemini-2.5-pro": "Pro",
   "gemini-2.5-flash": "Flash",
   "gemini-2.5-flash-lite-preview-06-17": "Flash Lite",
@@ -51,7 +66,7 @@ export const MODEL_DISPLAY_NAMES: Record<GeminiModelId, string> = {
   "gemini-2.0-flash-lite": "Flash Lite",
 };
 
-export const PRO_MODEL_ID: GeminiModelId = "gemini-2.5-pro";
+export const PRO_MODEL_ID: GeminiModelId = "gemini-3-pro-preview";
 
 export const DATE_RANGE_OPTIONS = [
   { value: "24h", label: "Last 24 hours" },

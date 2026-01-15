@@ -14,7 +14,7 @@ export type UserTier = (typeof USER_TIERS)[keyof typeof USER_TIERS];
 
 // Daily message limits by tier
 export const MESSAGE_LIMITS = {
-  [USER_TIERS.BASIC]: 50,
+  [USER_TIERS.BASIC]: 0, // Basic users cannot send messages (resource constraints)
   [USER_TIERS.PREMIUM]: 500,
 } as const;
 
