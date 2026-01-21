@@ -39,6 +39,7 @@ export const useChat = (chatId: string) => {
   const [initialFetchLoading, setInitialFetchLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [chatNotFound, setChatNotFound] = useState(false);
 
   // Streaming States
   const [isStreaming, setIsStreaming] = useState(false);
@@ -71,11 +72,17 @@ export const useChat = (chatId: string) => {
       setChatTitle(chatData.title);
       setMessages(chatData.messages as Message[]);
       setHasMore(chatData.messages.length === 10);
+      setChatNotFound(false);
       // We no longer expose model selection; keep state as default
     }
     if (chatDataError) {
-      setError(chatDataError.message);
-      setChatTitle("Error Loading Chat");
+      // Check if it's a NOT_FOUND error (chat doesn't exist or user doesn't own it)
+      if (chatDataError.data?.code === "NOT_FOUND") {
+        setChatNotFound(true);
+      } else {
+        setError(chatDataError.message);
+        setChatTitle("Error Loading Chat");
+      }
     }
     setInitialFetchLoading(isChatDataLoading);
   }, [chatData, chatDataError, isChatDataLoading]);
@@ -88,6 +95,7 @@ export const useChat = (chatId: string) => {
       setError(null);
       setPendingChatId(null);
       setHasMore(false);
+      setChatNotFound(false);
       // Model selection removed; do not change selectedModel here
     }
   }, [chatId, favoriteModel]);
@@ -515,6 +523,7 @@ export const useChat = (chatId: string) => {
     initialFetchLoading,
     isAwaitingFirstToken: isStreaming, // Updated for streaming flow
     error,
+    chatNotFound,
     setChatTitle,
     handleInputChange,
     activeFormSubmitHandler: handleFormSubmit,

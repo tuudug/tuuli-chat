@@ -12,7 +12,21 @@ export default function TRPCProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            // Keep data fresh for 30 seconds - avoids refetching on every navigation
+            staleTime: 30 * 1000,
+            // Cache data for 5 minutes
+            gcTime: 5 * 60 * 1000,
+            // Don't refetch when window regains focus for smoother UX
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
+  );
 
   const [trpcClient] = useState(() =>
     api.createClient({

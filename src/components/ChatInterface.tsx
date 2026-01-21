@@ -7,6 +7,7 @@ import ChatHeader from "./ChatHeader";
 import ChatInputArea from "./ChatInputArea";
 import MessageDisplayArea from "./MessageDisplayArea";
 import NewUserWelcomeModal from "./dialogs/NewUserWelcomeModal";
+import ChatNotFound from "./ChatNotFound";
 import { Message } from "@/types";
 
 interface ChatInterfaceProps {
@@ -37,6 +38,7 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     hasMore,
     loadMore,
     isLoadingMore,
+    chatNotFound,
   } = useChat(chatId);
 
   const { showWelcomeModal, handleAcceptWelcome } = useNewUserWelcome();
@@ -63,6 +65,11 @@ export default function ChatInterface({ chatId }: ChatInterfaceProps) {
     }
     return () => {};
   }, []);
+
+  // Show ChatNotFound if the chat doesn't exist or user doesn't have access
+  if (chatNotFound) {
+    return <ChatNotFound />;
+  }
 
   return (
     <>

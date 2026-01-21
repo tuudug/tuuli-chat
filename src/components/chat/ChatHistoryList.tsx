@@ -6,10 +6,23 @@ import { MessageSquareIcon } from "lucide-react";
 import Link from "next/link";
 
 import { useChatLayout } from "@/contexts/ChatLayoutContext";
+import { api } from "@/lib/trpc/client";
+import { useCallback } from "react";
 
 export default function ChatHistoryList() {
   const { chats, loading, error } = useChatHistory();
   const { activeChatId } = useChatLayout();
+  const utils = api.useUtils();
+
+  // Prefetch chat data on hover for snappier navigation
+  const handlePrefetch = useCallback(
+    (chatId: string) => {
+      // Prefetch both ownership check and chat history
+      utils.chat.isOwner.prefetch({ chatId });
+      utils.chat.history.prefetch({ chatId, limit: 10 });
+    },
+    [utils]
+  );
 
   if (loading) {
     return (
@@ -43,6 +56,7 @@ export default function ChatHistoryList() {
               <li key={chat.id}>
                 <Link
                   href={`/chat/${chat.id}`}
+                  onMouseEnter={() => handlePrefetch(chat.id)}
                   className={`block w-full text-left px-2 py-1.5 rounded text-sm text-text-primary hover:bg-bg-input focus:outline-none focus:bg-bg-input transition-colors truncate ${
                     activeChatId === chat.id ? "bg-bg-input" : ""
                   }`}

@@ -8,39 +8,23 @@ import {
   ArrowLeftIcon,
 } from "lucide-react";
 
-interface ChatNotFoundProps {
-  reason?: "not_found" | "unauthorized";
-}
-
-export default function ChatNotFound({
-  reason = "not_found",
-}: ChatNotFoundProps) {
-  const isUnauthorized = reason === "unauthorized";
+export default function ChatNotFound() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
       <div className="max-w-md w-full space-y-6">
         {/* Icon */}
-        <div
-          className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center ${
-            isUnauthorized
-              ? "bg-red-500/10 text-red-400"
-              : "bg-yellow-500/10 text-yellow-400"
-          }`}
-        >
+        <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-yellow-500/10 text-yellow-400">
           <AlertTriangleIcon size={32} />
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-text-primary">
-          {isUnauthorized ? "Access Denied" : "Chat Not Found"}
-        </h1>
+        <h1 className="text-2xl font-bold text-text-primary">Chat Not Found</h1>
 
         {/* Description */}
         <p className="text-text-secondary leading-relaxed">
-          {isUnauthorized
-            ? "This chat doesn&apos;t belong to your account. You can only access chats that you&apos;ve created."
-            : "The chat you&apos;re looking for doesn&apos;t exist. It may have been deleted or the link is incorrect."}
+          {/* eslint-disable-next-line react/no-unescaped-entities */}
+          The chat you're looking for doesn't exist. It may have been deleted or the link is incorrect.
         </p>
 
         {/* Action Buttons */}
