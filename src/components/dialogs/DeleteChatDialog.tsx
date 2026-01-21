@@ -19,22 +19,21 @@ export default function DeleteChatDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const deleteMutation = api.chat.delete.useMutation();
 
   const handleDelete = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      await api.chat.delete.useMutation().mutateAsync({ chatId });
+      await deleteMutation.mutateAsync({ chatId });
       onChatDeleted();
       router.push("/chat/new");
+      setIsOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete chat");
     } finally {
       setIsLoading(false);
-      if (!error) {
-        setIsOpen(false);
-      }
     }
   };
 

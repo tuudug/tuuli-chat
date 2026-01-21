@@ -21,6 +21,7 @@ export default function EditChatTitleDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const editTitleMutation = api.chat.editTitle.useMutation();
 
   useEffect(() => {
     setEditTitle(currentTitle);
@@ -46,7 +47,7 @@ export default function EditChatTitleDialog({
     setError(null);
 
     try {
-      const result = await api.chat.editTitle.useMutation().mutateAsync({
+      const result = await editTitleMutation.mutateAsync({
         chatId,
         title: editTitle.trim(),
       });
